@@ -110,7 +110,7 @@ export function SymbolPicker({ id, value, onValueChange, onSelect, invalid }: Sy
                 <div className="truncate text-[0.6875rem] text-muted-foreground">
                   {instrument.kind === "stock"
                     ? instrument.name
-                    : `${instrument.kind === "option" ? "Option" : "Future"} · lot ${instrument.lot}`}
+                    : `${instrument.kind === "option" ? "Option" : "Future"} • lot ${instrument.lot}`}
                 </div>
               </div>
               {instrument.close !== null && (

@@ -150,7 +150,7 @@ function DashboardView({
           </div>
           <div className="flex flex-col leading-tight">
             <span className="text-sm font-semibold tracking-tight">TradeBook</span>
-            <span className="text-[0.625rem] text-muted-foreground">Indian markets · NSE</span>
+            <span className="text-[0.625rem] text-muted-foreground">Indian markets • NSE</span>
           </div>
         </div>
 
@@ -224,7 +224,7 @@ function DashboardView({
                   <span className={cn("font-mono tabular-nums", pnlTone(unrealized))}>
                     {formatMoney(unrealized, { signed: true })}
                   </span>
-                  {priced.length < view.open.length && ` · ${priced.length}/${view.open.length} priced`}
+                  {priced.length < view.open.length && ` • ${priced.length}/${view.open.length} priced`}
                 </>
               ) : (
                 "All open positions"

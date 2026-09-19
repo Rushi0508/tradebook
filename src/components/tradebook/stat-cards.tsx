@@ -14,10 +14,10 @@ export function StatCards({ stats, risk, periodLabel }: StatCardsProps) {
   return (
     <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg bg-border ring-1 ring-border md:grid-cols-3 xl:grid-cols-6">
       <Stat
-        label={`Net P&L · ${periodLabel}`}
+        label={`Net P&L • ${periodLabel}`}
         value={money(stats.netPnl, true)}
         tone={pnlTone(stats.netPnl)}
-        detail={`${stats.trades} closed · ${stats.wins}W ${stats.losses}L`}
+        detail={`${stats.trades} closed • ${stats.wins}W ${stats.losses}L`}
       />
       <Stat
         label="Open risk"
@@ -26,7 +26,7 @@ export function StatCards({ stats, risk, periodLabel }: StatCardsProps) {
         detail={
           <>
             {risk.count} open
-            {risk.withoutStop > 0 && <span className="text-loss"> · {risk.withoutStop} without stop</span>}
+            {risk.withoutStop > 0 && <span className="text-loss"> • {risk.withoutStop} without stop</span>}
           </>
         }
       />
@@ -35,7 +35,7 @@ export function StatCards({ stats, risk, periodLabel }: StatCardsProps) {
         value={formatPercent(stats.winRate)}
         detail={
           stats.avgWin !== null || stats.avgLoss !== null
-            ? `Avg win ${stats.avgWin !== null ? money(stats.avgWin) : "—"} · loss ${
+            ? `Avg win ${stats.avgWin !== null ? money(stats.avgWin) : "—"} • loss ${
                 stats.avgLoss !== null ? money(stats.avgLoss) : "—"
               }`
             : "No closed trades"

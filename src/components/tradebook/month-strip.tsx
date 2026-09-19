@@ -19,7 +19,7 @@ export function MonthStrip({ months, selected, currentMonth, onSelect }: MonthSt
     <div className="rounded-lg bg-card px-4 pt-3 pb-2 ring-1 ring-border">
       <div className="mb-2 flex items-baseline justify-between">
         <div className="text-[0.6875rem] tracking-wide text-muted-foreground uppercase">
-          Monthly P&amp;L · {months[0].key.slice(0, 4)}
+          Monthly P&amp;L • {months[0].key.slice(0, 4)}
         </div>
         <div
           className={cn(
@@ -73,7 +73,7 @@ export function MonthStrip({ months, selected, currentMonth, onSelect }: MonthSt
                 </div>
               </TooltipTrigger>
               <TooltipContent>
-                {format(parseISO(`${month.key}-01`), "MMMM yyyy")} ·{" "}
+                {format(parseISO(`${month.key}-01`), "MMMM yyyy")} •{" "}
                 {month.trades ? formatMoney(month.pnl, { signed: true }) : "no trades"}
               </TooltipContent>
             </Tooltip>
