@@ -236,7 +236,12 @@ const openColumns = helper.columns([
         <Stack
           className={pnlTone(row.original.unrealized)}
           top={money(row.original.unrealized, true)}
-          bottom={row.original.unrealizedR !== undefined ? formatRatio(row.original.unrealizedR, "R") : undefined}
+          bottom={
+            <>
+              {signedPercent(row.original.lastChange)}
+              {row.original.unrealizedR !== undefined && ` • ${formatRatio(row.original.unrealizedR, "R")}`}
+            </>
+          }
         />
       ) : (
         <Muted>—</Muted>
