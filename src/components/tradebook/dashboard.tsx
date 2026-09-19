@@ -9,7 +9,6 @@ import {
   Add01Icon,
   ArrowLeft01Icon,
   ArrowRight01Icon,
-  BookOpen01Icon,
   Moon02Icon,
   RefreshIcon,
   Settings02Icon,
@@ -17,6 +16,7 @@ import {
 } from "@hugeicons/core-free-icons"
 
 import { CloseTradeDialog } from "@/components/tradebook/close-trade-dialog"
+import { Logo } from "@/components/tradebook/logo"
 import { TrailStopDialog } from "@/components/tradebook/trail-stop-dialog"
 import { LabelFilter } from "@/components/tradebook/label-filter"
 import { MonthStrip } from "@/components/tradebook/month-strip"
@@ -150,9 +150,7 @@ function DashboardView({
     <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-4 px-4 py-4 sm:px-6">
       <header className="flex flex-wrap items-center gap-3">
         <div className="mr-auto flex items-center gap-2">
-          <div className="flex size-7 items-center justify-center rounded-md bg-primary text-primary-foreground">
-            <HugeiconsIcon icon={BookOpen01Icon} strokeWidth={2} className="size-4" />
-          </div>
+          <Logo className="size-8" />
           <div className="flex flex-col leading-tight">
             <span className="text-sm font-semibold tracking-tight">TradeBook</span>
             <span className="text-[0.625rem] text-muted-foreground">Indian markets</span>
