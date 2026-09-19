@@ -280,12 +280,6 @@ function DashboardView({
         </TabsContent>
       </Tabs>
 
-      <footer className="flex justify-end text-[0.625rem] text-muted-foreground">
-        <a href="https://logo.dev" target="_blank" rel="noreferrer" className="hover:text-foreground">
-          Logos provided by Logo.dev
-        </a>
-      </footer>
-
       <TradeFormSheet
         open={formOpen}
         onOpenChange={setFormOpen}
