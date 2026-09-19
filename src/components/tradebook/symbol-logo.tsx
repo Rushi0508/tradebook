@@ -27,6 +27,7 @@ export function SymbolLogo(props: SymbolLogoProps) {
 
 function LogoImage({ ticker, size = 20, className }: SymbolLogoProps) {
   const [failed, setFailed] = useState(() => !TOKEN || missing.has(ticker))
+  const [loaded, setLoaded] = useState(false)
   const initials = ticker.replace(/\.(NS|BO)$/, "").slice(0, 2)
 
   return (
@@ -37,16 +38,19 @@ function LogoImage({ ticker, size = 20, className }: SymbolLogoProps) {
       )}
       style={{ width: size, height: size }}
     >
-      {failed ? (
-        initials
-      ) : (
+      {initials}
+      {!failed && (
         <Image
           unoptimized
           src={`https://img.logo.dev/ticker/${encodeURIComponent(ticker)}?token=${TOKEN}&size=${size * 2}&format=png&fallback=404`}
           alt=""
           width={size}
           height={size}
-          className="size-full bg-white object-contain"
+          className={cn(
+            "absolute inset-0 size-full bg-white object-contain transition-opacity",
+            loaded ? "opacity-100" : "opacity-0"
+          )}
+          onLoad={() => setLoaded(true)}
           onError={() => {
             missing.add(ticker)
             setFailed(true)
