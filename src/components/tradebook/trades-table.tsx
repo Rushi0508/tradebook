@@ -51,6 +51,7 @@ import {
   rMultiple,
   unrealizedPnl,
 } from "@/lib/metrics"
+import { TOOLTIPS, type TooltipKey } from "@/lib/tooltips"
 import type { Label, Trade } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
@@ -111,6 +112,14 @@ const features = tableFeatures({
 })
 
 const helper = createColumnHelper<typeof features, TradeRow>()
+
+const HEADER_TOOLTIPS: Record<string, TooltipKey> = {
+  stop: "stopTarget",
+  last: "last",
+  unrealized: "unrealized",
+  risk: "tradeRisk",
+  pnl: "pnl",
+}
 
 const RIGHT_ALIGNED = new Set(["qty", "entry", "stop", "last", "unrealized", "risk", "exit", "pnl"])
 
@@ -354,22 +363,24 @@ export function TradesTable({
                     )}
                   >
                     {header.isPlaceholder ? null : header.column.getCanSort() ? (
-                      <button
-                        type="button"
-                        onClick={header.column.getToggleSortingHandler()}
-                        className={cn(
-                          "group/sort inline-flex items-center gap-1 outline-none hover:text-foreground focus-visible:underline",
-                          right && "flex-row-reverse",
-                          sorted && "text-foreground"
-                        )}
-                      >
-                        <table.FlexRender header={header} />
-                        <HugeiconsIcon
-                          icon={sorted === "asc" ? ArrowUp01Icon : sorted === "desc" ? ArrowDown01Icon : ArrowUpDownIcon}
-                          strokeWidth={2}
-                          className={cn("size-3", !sorted && "opacity-0 group-hover/sort:opacity-50")}
-                        />
-                      </button>
+                      <HeaderTooltip info={HEADER_TOOLTIPS[header.column.id]}>
+                        <button
+                          type="button"
+                          onClick={header.column.getToggleSortingHandler()}
+                          className={cn(
+                            "group/sort inline-flex items-center gap-1 outline-none hover:text-foreground focus-visible:underline",
+                            right && "flex-row-reverse",
+                            sorted && "text-foreground"
+                          )}
+                        >
+                          <table.FlexRender header={header} />
+                          <HugeiconsIcon
+                            icon={sorted === "asc" ? ArrowUp01Icon : sorted === "desc" ? ArrowDown01Icon : ArrowUpDownIcon}
+                            strokeWidth={2}
+                            className={cn("size-3", !sorted && "opacity-0 group-hover/sort:opacity-50")}
+                          />
+                        </button>
+                      </HeaderTooltip>
                     ) : (
                       <table.FlexRender header={header} />
                     )}
@@ -410,6 +421,16 @@ export function TradesTable({
         </TableBody>
       </Table>
     </ActionsContext.Provider>
+  )
+}
+
+function HeaderTooltip({ info, children }: { info: TooltipKey | undefined; children: React.ReactElement }) {
+  if (!info) return children
+  return (
+    <Tooltip>
+      <TooltipTrigger render={children} />
+      <TooltipContent className="max-w-64 font-sans">{TOOLTIPS[info]}</TooltipContent>
+    </Tooltip>
   )
 }
 
