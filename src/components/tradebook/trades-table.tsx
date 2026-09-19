@@ -38,7 +38,6 @@ export interface TradeActions {
 interface TradesTableProps extends TradeActions {
   trades: Trade[]
   labels: Label[]
-  currency: string
   mode: "open" | "closed"
   quotes: Map<string, Instrument>
   empty: React.ReactNode
@@ -48,12 +47,12 @@ function shortDate(date: string) {
   return format(parseISO(date), "d MMM yy")
 }
 
-export function TradesTable({ trades, labels, currency, mode, quotes, empty, ...actions }: TradesTableProps) {
+export function TradesTable({ trades, labels, mode, quotes, empty, ...actions }: TradesTableProps) {
   const labelById = new Map(labels.map((label) => [label.id, label]))
 
   if (!trades.length) return <div className="py-14">{empty}</div>
 
-  const money = (value: number, signed = false) => formatMoney(value, currency, { signed })
+  const money = (value: number, signed = false) => formatMoney(value, { signed })
 
   return (
     <Table className="font-mono text-xs tabular-nums">

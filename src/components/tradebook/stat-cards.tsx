@@ -5,14 +5,11 @@ import { cn } from "@/lib/utils"
 interface StatCardsProps {
   stats: PerformanceStats
   risk: OpenRiskSummary
-  capital: number
-  currency: string
   periodLabel: string
 }
 
-export function StatCards({ stats, risk, capital, currency, periodLabel }: StatCardsProps) {
-  const money = (value: number, signed = false) => formatMoney(value, currency, { signed })
-  const riskPct = capital > 0 ? risk.total / capital : null
+export function StatCards({ stats, risk, periodLabel }: StatCardsProps) {
+  const money = (value: number, signed = false) => formatMoney(value, { signed })
 
   return (
     <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg bg-border ring-1 ring-border md:grid-cols-3 xl:grid-cols-6">
@@ -28,7 +25,6 @@ export function StatCards({ stats, risk, capital, currency, periodLabel }: StatC
         tone={risk.total > 0 ? "text-warning" : undefined}
         detail={
           <>
-            {riskPct !== null && <span>{formatPercent(riskPct, 2)} of capital · </span>}
             {risk.count} open
             {risk.withoutStop > 0 && <span className="text-loss"> · {risk.withoutStop} without stop</span>}
           </>
@@ -63,11 +59,7 @@ export function StatCards({ stats, risk, capital, currency, periodLabel }: StatC
         label="Max drawdown"
         value={stats.maxDrawdown > 0 ? money(-stats.maxDrawdown) : money(0)}
         tone={stats.maxDrawdown > 0 ? "text-loss" : undefined}
-        detail={
-          stats.maxDrawdownPct !== null
-            ? `${formatPercent(stats.maxDrawdownPct, 2)} from peak`
-            : "Peak-to-trough, closed trades"
-        }
+        detail="Peak-to-trough, closed trades"
       />
     </div>
   )

@@ -1,7 +1,7 @@
 import Dexie, { type EntityTable } from "dexie"
 
 import type { Instrument } from "@/lib/market/types"
-import { DEFAULT_SETTINGS, LABEL_COLORS, type Label, type Settings, type Trade } from "@/lib/types"
+import { LABEL_COLORS, type Label, type Trade } from "@/lib/types"
 
 export interface MetaEntry {
   key: string
@@ -11,7 +11,6 @@ export interface MetaEntry {
 export const db = new Dexie("tradebook") as Dexie & {
   trades: EntityTable<Trade, "id">
   labels: EntityTable<Label, "id">
-  settings: EntityTable<Settings, "id">
   instruments: EntityTable<Instrument, "symbol">
   meta: EntityTable<MetaEntry, "key">
 }
@@ -25,6 +24,10 @@ db.version(1).stores({
 db.version(2).stores({
   instruments: "symbol, underlying, kind",
   meta: "key",
+})
+
+db.version(3).stores({
+  settings: null,
 })
 
 export async function requestPersistentStorage() {
@@ -88,14 +91,6 @@ export async function deleteLabel(id: string) {
   })
 }
 
-export async function getSettings() {
-  return (await db.settings.get("app")) ?? DEFAULT_SETTINGS
-}
-
-export function saveSettings(changes: Partial<Omit<Settings, "id">>) {
-  return db.settings.put({ ...DEFAULT_SETTINGS, ...changes, id: "app" })
-}
-
 const BACKUP_VERSION = 1
 
 export interface Backup {
@@ -104,22 +99,16 @@ export interface Backup {
   exportedAt: string
   trades: Trade[]
   labels: Label[]
-  settings: Settings[]
 }
 
 export async function exportBackup(): Promise<Backup> {
-  const [trades, labels, settings] = await Promise.all([
-    db.trades.toArray(),
-    db.labels.toArray(),
-    db.settings.toArray(),
-  ])
+  const [trades, labels] = await Promise.all([db.trades.toArray(), db.labels.toArray()])
   return {
     app: "tradebook",
     version: BACKUP_VERSION,
     exportedAt: new Date().toISOString(),
     trades,
     labels,
-    settings,
   }
 }
 
@@ -128,11 +117,10 @@ export async function importBackup(data: unknown) {
   if (backup?.app !== "tradebook" || !Array.isArray(backup.trades) || !Array.isArray(backup.labels)) {
     throw new Error("This file is not a TradeBook backup")
   }
-  await db.transaction("rw", db.trades, db.labels, db.settings, async () => {
-    await Promise.all([db.trades.clear(), db.labels.clear(), db.settings.clear()])
+  await db.transaction("rw", db.trades, db.labels, async () => {
+    await Promise.all([db.trades.clear(), db.labels.clear()])
     await db.labels.bulkAdd(backup.labels!)
     await db.trades.bulkAdd(backup.trades!)
-    if (Array.isArray(backup.settings)) await db.settings.bulkAdd(backup.settings)
   })
   return { trades: backup.trades.length, labels: backup.labels.length }
 }

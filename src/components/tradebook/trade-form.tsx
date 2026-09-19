@@ -148,10 +148,9 @@ interface TradeFormSheetProps {
   onOpenChange: (open: boolean) => void
   trade?: Trade
   labels: Label[]
-  currency: string
 }
 
-export function TradeFormSheet({ open, onOpenChange, trade, labels, currency }: TradeFormSheetProps) {
+export function TradeFormSheet({ open, onOpenChange, trade, labels }: TradeFormSheetProps) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full gap-0 sm:max-w-md">
@@ -160,7 +159,6 @@ export function TradeFormSheet({ open, onOpenChange, trade, labels, currency }: 
             key={trade?.id ?? "new"}
             trade={trade}
             labels={labels}
-            currency={currency}
             onDone={() => onOpenChange(false)}
           />
         )}
@@ -172,12 +170,10 @@ export function TradeFormSheet({ open, onOpenChange, trade, labels, currency }: 
 function TradeForm({
   trade,
   labels,
-  currency,
   onDone,
 }: {
   trade?: Trade
   labels: Label[]
-  currency: string
   onDone: () => void
 }) {
   const [form, setForm] = useState(() => initialState(trade))
@@ -346,7 +342,7 @@ function TradeForm({
           <div className="grid grid-cols-2 gap-3 rounded-md bg-muted/50 px-3 py-2 font-mono text-[0.6875rem] tabular-nums">
             <div>
               <div className="text-muted-foreground">Risk</div>
-              <div>{riskAmount !== null ? formatMoney(riskAmount, currency) : "—"}</div>
+              <div>{riskAmount !== null ? formatMoney(riskAmount) : "—"}</div>
             </div>
             <div>
               <div className="text-muted-foreground">Reward : risk</div>

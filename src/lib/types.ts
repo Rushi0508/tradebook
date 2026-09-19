@@ -31,14 +31,6 @@ export interface Label {
   color: string
 }
 
-export interface Settings {
-  id: "app"
-  capital: number
-  currency: string
-}
-
-export const DEFAULT_SETTINGS: Settings = { id: "app", capital: 0, currency: "INR" }
-
 export const LABEL_COLORS = [
   "#f97316",
   "#eab308",

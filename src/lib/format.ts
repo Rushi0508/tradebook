@@ -1,21 +1,23 @@
-const currencyFormatters = new Map<string, Intl.NumberFormat>()
+const LOCALE = "en-IN"
 
-export function formatMoney(value: number, currency: string, { signed = false } = {}) {
-  const key = `${currency}:${signed}`
-  let formatter = currencyFormatters.get(key)
-  if (!formatter) {
-    formatter = new Intl.NumberFormat(undefined, {
-      style: "currency",
-      currency,
-      maximumFractionDigits: 2,
-      signDisplay: signed ? "exceptZero" : "auto",
-    })
-    currencyFormatters.set(key, formatter)
-  }
-  return formatter.format(value)
+const moneyFormatter = new Intl.NumberFormat(LOCALE, {
+  style: "currency",
+  currency: "INR",
+  maximumFractionDigits: 2,
+})
+
+const signedMoneyFormatter = new Intl.NumberFormat(LOCALE, {
+  style: "currency",
+  currency: "INR",
+  maximumFractionDigits: 2,
+  signDisplay: "exceptZero",
+})
+
+export function formatMoney(value: number, { signed = false } = {}) {
+  return (signed ? signedMoneyFormatter : moneyFormatter).format(value)
 }
 
-const numberFormatter = new Intl.NumberFormat(undefined, { maximumFractionDigits: 4 })
+const numberFormatter = new Intl.NumberFormat(LOCALE, { maximumFractionDigits: 4 })
 
 export function formatNumber(value: number) {
   return numberFormatter.format(value)

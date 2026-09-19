@@ -8,11 +8,10 @@ interface MonthStripProps {
   months: { key: string; pnl: number; trades: number }[]
   selected: string | null
   currentMonth: string
-  currency: string
   onSelect: (key: string) => void
 }
 
-export function MonthStrip({ months, selected, currentMonth, currency, onSelect }: MonthStripProps) {
+export function MonthStrip({ months, selected, currentMonth, onSelect }: MonthStripProps) {
   const max = Math.max(...months.map((month) => Math.abs(month.pnl)), 1)
   const yearTotal = months.reduce((sum, month) => sum + month.pnl, 0)
 
@@ -28,7 +27,7 @@ export function MonthStrip({ months, selected, currentMonth, currency, onSelect 
             yearTotal > 0 ? "text-profit" : yearTotal < 0 ? "text-loss" : "text-muted-foreground"
           )}
         >
-          {formatMoney(yearTotal, currency, { signed: true })}
+          {formatMoney(yearTotal, { signed: true })}
         </div>
       </div>
       <div className="grid grid-cols-12 gap-1">
@@ -75,7 +74,7 @@ export function MonthStrip({ months, selected, currentMonth, currency, onSelect 
               </TooltipTrigger>
               <TooltipContent>
                 {format(parseISO(`${month.key}-01`), "MMMM yyyy")} ·{" "}
-                {month.trades ? formatMoney(month.pnl, currency, { signed: true }) : "no trades"}
+                {month.trades ? formatMoney(month.pnl, { signed: true }) : "no trades"}
               </TooltipContent>
             </Tooltip>
           )

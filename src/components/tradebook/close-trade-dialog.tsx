@@ -22,23 +22,22 @@ import { cn } from "@/lib/utils"
 
 interface CloseTradeDialogProps {
   trade: Trade | null
-  currency: string
   onOpenChange: (open: boolean) => void
 }
 
-export function CloseTradeDialog({ trade, currency, onOpenChange }: CloseTradeDialogProps) {
+export function CloseTradeDialog({ trade, onOpenChange }: CloseTradeDialogProps) {
   return (
     <Dialog open={!!trade} onOpenChange={onOpenChange}>
       <DialogContent>
         {trade && (
-          <CloseTradeForm key={trade.id} trade={trade} currency={currency} onDone={() => onOpenChange(false)} />
+          <CloseTradeForm key={trade.id} trade={trade} onDone={() => onOpenChange(false)} />
         )}
       </DialogContent>
     </Dialog>
   )
 }
 
-function CloseTradeForm({ trade, currency, onDone }: { trade: Trade; currency: string; onDone: () => void }) {
+function CloseTradeForm({ trade, onDone }: { trade: Trade; onDone: () => void }) {
   const [exitPrice, setExitPrice] = useState("")
   const [exitDate, setExitDate] = useState(() => (todayIso() < trade.entryDate ? trade.entryDate : todayIso()))
   const [fees, setFees] = useState(trade.fees ? String(trade.fees) : "")
@@ -58,7 +57,7 @@ function CloseTradeForm({ trade, currency, onDone }: { trade: Trade; currency: s
     if (exitDate < trade.entryDate) return setError("Exit date is before the entry date")
     await closeTrade(trade.id, price, exitDate, feeValue)
     toast.success(`${trade.symbol} closed`, {
-      description: pnl !== null ? formatMoney(pnl, currency, { signed: true }) : undefined,
+      description: pnl !== null ? formatMoney(pnl, { signed: true }) : undefined,
     })
     onDone()
   }
@@ -113,7 +112,7 @@ function CloseTradeForm({ trade, currency, onDone }: { trade: Trade; currency: s
       <div className="flex items-baseline justify-between rounded-md bg-muted/50 px-3 py-2 font-mono tabular-nums">
         <span className="text-muted-foreground">Realized P&amp;L</span>
         <span className={cn("text-sm font-medium", pnl !== null && pnlTone(pnl))}>
-          {pnl !== null ? formatMoney(pnl, currency, { signed: true }) : "—"}
+          {pnl !== null ? formatMoney(pnl, { signed: true }) : "—"}
           {r !== null && <span className="ml-2 text-xs opacity-80">{formatRatio(r, "R")}</span>}
         </span>
       </div>

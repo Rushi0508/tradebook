@@ -79,10 +79,9 @@ export interface PerformanceStats {
   expectancyR: number | null
   profitFactor: number | null
   maxDrawdown: number
-  maxDrawdownPct: number | null
 }
 
-export function computeStats(closed: Trade[], startingEquity: number | null = null): PerformanceStats {
+export function computeStats(closed: Trade[]): PerformanceStats {
   const sorted = [...closed].sort(byExitOrder)
   let grossProfit = 0
   let grossLoss = 0
@@ -93,7 +92,6 @@ export function computeStats(closed: Trade[], startingEquity: number | null = nu
   let equity = 0
   let peak = 0
   let maxDrawdown = 0
-  let maxDrawdownPct: number | null = null
 
   for (const trade of sorted) {
     const pnl = realizedPnl(trade)
@@ -111,12 +109,7 @@ export function computeStats(closed: Trade[], startingEquity: number | null = nu
     }
     equity += pnl
     peak = Math.max(peak, equity)
-    const drawdown = peak - equity
-    if (drawdown > maxDrawdown) {
-      maxDrawdown = drawdown
-      const peakEquity = startingEquity === null ? 0 : startingEquity + peak
-      maxDrawdownPct = peakEquity > 0 ? drawdown / peakEquity : null
-    }
+    maxDrawdown = Math.max(maxDrawdown, peak - equity)
   }
 
   const count = sorted.length
@@ -136,7 +129,6 @@ export function computeStats(closed: Trade[], startingEquity: number | null = nu
     expectancyR: rCount ? rSum / rCount : null,
     profitFactor: grossLoss > 0 ? grossProfit / grossLoss : grossProfit > 0 ? Infinity : null,
     maxDrawdown,
-    maxDrawdownPct,
   }
 }
 

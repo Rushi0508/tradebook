@@ -47,7 +47,6 @@ import {
   computeStats,
   isOpen,
   pnlByMonth,
-  realizedPnl,
   summarizeOpenRisk,
   unrealizedPnl,
 } from "@/lib/metrics"
@@ -69,7 +68,6 @@ export function Dashboard() {
 function DashboardView({
   trades,
   labels,
-  settings,
   persisted,
 }: NonNullable<ReturnType<typeof useTradebook>> & { persisted: boolean | null }) {
   const currentMonth = todayIso().slice(0, 7)
@@ -92,19 +90,16 @@ function DashboardView({
     const closed = (period ? allClosed.filter((trade) => trade.exitDate!.startsWith(period)) : allClosed)
       .sort(byExitOrder)
       .reverse()
-    const priorPnl = period
-      ? allClosed.filter((trade) => trade.exitDate! < `${period}-01`).reduce((sum, t) => sum + realizedPnl(t), 0)
-      : 0
     const year = Number((period ?? currentMonth).slice(0, 4))
 
     return {
       open,
       closed,
-      stats: computeStats(closed, settings.capital > 0 ? settings.capital + priorPnl : null),
+      stats: computeStats(closed),
       risk: summarizeOpenRisk(open),
       months: pnlByMonth(allClosed, year),
     }
-  }, [trades, labelFilter, period, settings.capital, currentMonth])
+  }, [trades, labelFilter, period, currentMonth])
 
   const quotes = useQuotes([...view.open, ...view.closed].map((trade) => trade.symbol))
   const priced = view.open.filter((trade) => quotes.get(trade.symbol)?.close != null)
@@ -153,7 +148,10 @@ function DashboardView({
           <div className="flex size-7 items-center justify-center rounded-md bg-primary text-primary-foreground">
             <HugeiconsIcon icon={BookOpen01Icon} strokeWidth={2} className="size-4" />
           </div>
-          <span className="text-sm font-semibold tracking-tight">TradeBook</span>
+          <div className="flex flex-col leading-tight">
+            <span className="text-sm font-semibold tracking-tight">TradeBook</span>
+            <span className="text-[0.625rem] text-muted-foreground">Indian markets · NSE</span>
+          </div>
         </div>
 
         <div className="flex items-center gap-1 rounded-md ring-1 ring-border">
@@ -194,8 +192,6 @@ function DashboardView({
       <StatCards
         stats={view.stats}
         risk={view.risk}
-        capital={settings.capital}
-        currency={settings.currency}
         periodLabel={periodLabel}
       />
 
@@ -203,7 +199,6 @@ function DashboardView({
         months={view.months}
         selected={period}
         currentMonth={currentMonth}
-        currency={settings.currency}
         onSelect={(key) => setPeriod(key === period ? null : key)}
       />
 
@@ -227,7 +222,7 @@ function DashboardView({
                 <>
                   Unrealized{" "}
                   <span className={cn("font-mono tabular-nums", pnlTone(unrealized))}>
-                    {formatMoney(unrealized, settings.currency, { signed: true })}
+                    {formatMoney(unrealized, { signed: true })}
                   </span>
                   {priced.length < view.open.length && ` · ${priced.length}/${view.open.length} priced`}
                 </>
@@ -245,7 +240,6 @@ function DashboardView({
             quotes={quotes}
             trades={view.open}
             labels={labels}
-            currency={settings.currency}
             empty={
               <EmptyState
                 title={hasTrades ? "No open positions" : "Log your first trade"}
@@ -254,7 +248,7 @@ function DashboardView({
                     ? labelFilter.length
                       ? "No open trades match this label filter."
                       : "You are fully in cash."
-                    : "Your journal lives only in this browser. Nothing is uploaded anywhere."
+                    : "Built for Indian markets (NSE). Your journal lives only in this browser and is never uploaded."
                 }
                 action={!hasTrades ? () => openForm() : undefined}
               />
@@ -268,7 +262,6 @@ function DashboardView({
             quotes={quotes}
             trades={view.closed}
             labels={labels}
-            currency={settings.currency}
             empty={
               <EmptyState
                 title="No closed trades"
@@ -285,17 +278,14 @@ function DashboardView({
         onOpenChange={setFormOpen}
         trade={editing}
         labels={labels}
-        currency={settings.currency}
       />
       <CloseTradeDialog
         trade={closing}
-        currency={settings.currency}
         onOpenChange={(open) => !open && setClosing(null)}
       />
       <SettingsDialog
         open={settingsOpen}
         onOpenChange={setSettingsOpen}
-        settings={settings}
         labels={labels}
         persisted={persisted}
       />
