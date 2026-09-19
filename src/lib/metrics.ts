@@ -22,8 +22,27 @@ export function unrealizedPnl(trade: Trade, lastPrice: number) {
 }
 
 export function initialRisk(trade: Trade) {
-  if (trade.stopLoss === null) return null
-  return Math.abs(trade.entryPrice - trade.stopLoss) * units(trade)
+  if (trade.initialStop === null) return null
+  return Math.abs(trade.entryPrice - trade.initialStop) * units(trade)
+}
+
+export function rewardToRisk(trade: Pick<Trade, "entryPrice" | "initialStop" | "target">) {
+  if (trade.initialStop === null || trade.target === null) return null
+  const risk = Math.abs(trade.entryPrice - trade.initialStop)
+  return risk ? Math.abs(trade.target - trade.entryPrice) / risk : null
+}
+
+export function lockedProfit(trade: Trade) {
+  if (trade.stopLoss === null) return 0
+  return Math.max(0, (trade.stopLoss - trade.entryPrice) * direction(trade) * units(trade))
+}
+
+export function isRiskFree(trade: Trade) {
+  return trade.stopLoss !== null && (trade.stopLoss - trade.entryPrice) * direction(trade) >= 0
+}
+
+export function isWideningStop(trade: Trade, price: number) {
+  return trade.stopLoss !== null && (price - trade.stopLoss) * direction(trade) < 0
 }
 
 export function openRisk(trade: Trade) {
@@ -50,19 +69,22 @@ export interface OpenRiskSummary {
   count: number
   withoutStop: number
   exposure: number
+  locked: number
 }
 
 export function summarizeOpenRisk(trades: Trade[]): OpenRiskSummary {
   let total = 0
   let withoutStop = 0
   let exposure = 0
+  let locked = 0
   for (const trade of trades) {
+    locked += lockedProfit(trade)
     const risk = openRisk(trade)
     if (risk === null) withoutStop++
     else total += risk
     exposure += positionValue(trade)
   }
-  return { total, count: trades.length, withoutStop, exposure }
+  return { total, count: trades.length, withoutStop, exposure, locked }
 }
 
 export interface PerformanceStats {

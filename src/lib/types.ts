@@ -3,6 +3,11 @@ export type Side = "long" | "short"
 export const INSTRUMENTS = ["stock", "option", "future", "crypto", "forex", "other"] as const
 export type Instrument = (typeof INSTRUMENTS)[number]
 
+export interface StopMove {
+  date: string
+  price: number
+}
+
 export interface Trade {
   id: string
   symbol: string
@@ -12,6 +17,8 @@ export interface Trade {
   multiplier: number
   entryPrice: number
   stopLoss: number | null
+  initialStop: number | null
+  stopHistory: StopMove[]
   target: number | null
   entryDate: string
   exitPrice: number | null

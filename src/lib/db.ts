@@ -1,7 +1,7 @@
 import Dexie, { type EntityTable } from "dexie"
 
 import type { Instrument } from "@/lib/market/types"
-import { LABEL_COLORS, type Label, type Trade } from "@/lib/types"
+import { LABEL_COLORS, type Label, type StopMove, type Trade } from "@/lib/types"
 
 export interface MetaEntry {
   key: string
@@ -30,6 +30,24 @@ db.version(3).stores({
   settings: null,
 })
 
+db.version(4)
+  .stores({})
+  .upgrade((tx) =>
+    tx
+      .table("trades")
+      .toCollection()
+      .modify((trade: Trade) => Object.assign(trade, normalizeTrade(trade)))
+  )
+
+export function normalizeTrade(trade: Trade): Trade {
+  if (Array.isArray(trade.stopHistory) && trade.initialStop !== undefined) return trade
+  return {
+    ...trade,
+    initialStop: trade.stopLoss,
+    stopHistory: trade.stopLoss === null ? [] : [{ date: trade.entryDate, price: trade.stopLoss }],
+  }
+}
+
 export async function requestPersistentStorage() {
   if (typeof navigator === "undefined" || !navigator.storage?.persist) return false
   if (await navigator.storage.persisted()) return true
@@ -51,6 +69,33 @@ export async function saveTrade(input: TradeInput, id?: string) {
 
 export function closeTrade(id: string, exitPrice: number, exitDate: string, fees: number) {
   return db.trades.update(id, { exitPrice, exitDate, fees, updatedAt: Date.now() })
+}
+
+export async function trailStop(id: string, move: StopMove) {
+  await db.transaction("rw", db.trades, async () => {
+    const trade = await db.trades.get(id)
+    if (!trade) return
+    const stopHistory = [...trade.stopHistory, move].sort((a, b) => a.date.localeCompare(b.date))
+    await db.trades.update(id, {
+      stopHistory,
+      stopLoss: stopHistory[stopHistory.length - 1].price,
+      initialStop: trade.initialStop ?? move.price,
+      updatedAt: Date.now(),
+    })
+  })
+}
+
+export async function undoStopMove(id: string) {
+  await db.transaction("rw", db.trades, async () => {
+    const trade = await db.trades.get(id)
+    if (!trade || trade.stopHistory.length < 2) return
+    const stopHistory = trade.stopHistory.slice(0, -1)
+    await db.trades.update(id, {
+      stopHistory,
+      stopLoss: stopHistory[stopHistory.length - 1].price,
+      updatedAt: Date.now(),
+    })
+  })
 }
 
 export function reopenTrade(id: string) {
@@ -120,7 +165,7 @@ export async function importBackup(data: unknown) {
   await db.transaction("rw", db.trades, db.labels, async () => {
     await Promise.all([db.trades.clear(), db.labels.clear()])
     await db.labels.bulkAdd(backup.labels!)
-    await db.trades.bulkAdd(backup.trades!)
+    await db.trades.bulkAdd(backup.trades!.map(normalizeTrade))
   })
   return { trades: backup.trades.length, labels: backup.labels.length }
 }

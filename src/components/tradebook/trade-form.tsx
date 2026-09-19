@@ -19,10 +19,11 @@ import {
 } from "@/components/ui/sheet"
 import { Textarea } from "@/components/ui/textarea"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
+import { StopHistory } from "@/components/tradebook/stop-history"
 import { db, saveTrade, type TradeInput } from "@/lib/db"
 import { formatMoney, formatRatio, todayIso } from "@/lib/format"
 import type { Instrument as MarketInstrument } from "@/lib/market/types"
-import { INSTRUMENTS, type Instrument, type Label, type Side, type Trade } from "@/lib/types"
+import { INSTRUMENTS, type Instrument, type Label, type Side, type StopMove, type Trade } from "@/lib/types"
 
 const INSTRUMENT_ITEMS = INSTRUMENTS.map((value) => ({
   value,
@@ -76,7 +77,7 @@ function initialState(trade?: Trade): FormState {
     quantity: String(trade.quantity),
     multiplier: String(trade.multiplier),
     entryPrice: String(trade.entryPrice),
-    stopLoss: toText(trade.stopLoss),
+    stopLoss: toText(trade.initialStop),
     target: toText(trade.target),
     entryDate: trade.entryDate,
     exitPrice: toText(trade.exitPrice),
@@ -95,7 +96,15 @@ function parseNumber(value: string) {
 
 type Errors = Partial<Record<keyof FormState, string>>
 
-function validate(form: FormState): { errors: Errors; input?: TradeInput } {
+function stopFields(history: StopMove[], initial: number | null, entryDate: string) {
+  if (initial === null) return { initialStop: null, stopLoss: null, stopHistory: [] }
+  const stopHistory = [{ date: entryDate, price: initial }, ...history.slice(1)]
+  return { initialStop: initial, stopLoss: stopHistory[stopHistory.length - 1].price, stopHistory }
+}
+
+type FormInput = Omit<TradeInput, "initialStop" | "stopHistory">
+
+function validate(form: FormState): { errors: Errors; input?: FormInput } {
   const errors: Errors = {}
   const quantity = parseNumber(form.quantity)
   const multiplier = parseNumber(form.multiplier)
@@ -218,9 +227,11 @@ function TradeForm({
     try {
       const listed = await db.instruments.get(result.input.symbol)
       const unchanged = trade?.symbol === result.input.symbol
+      const current = trade ? await db.trades.get(trade.id) : undefined
       await saveTrade(
         {
           ...result.input,
+          ...stopFields(current?.stopHistory ?? [], result.input.stopLoss, result.input.entryDate),
           exchange: listed ? listed.exchange : unchanged ? (trade.exchange ?? null) : null,
           underlying: listed ? listed.underlying : unchanged ? (trade.underlying ?? null) : null,
         },
@@ -325,7 +336,7 @@ function TradeForm({
             />
             <NumberField
               id="stopLoss"
-              label="Stop loss"
+              label={trade ? "Initial stop" : "Stop loss"}
               value={form.stopLoss}
               onChange={(v) => set("stopLoss", v)}
               error={errors.stopLoss}
@@ -349,6 +360,8 @@ function TradeForm({
               <div>{formatRatio(rewardRatio, "R")}</div>
             </div>
           </div>
+
+          {trade && <StopHistory tradeId={trade.id} />}
 
           <Field>
             <FieldLabel htmlFor="labels">Labels</FieldLabel>

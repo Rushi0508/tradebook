@@ -5,6 +5,7 @@ import { differenceInCalendarDays, format, parseISO } from "date-fns"
 import { HugeiconsIcon } from "@hugeicons/react"
 import {
   ArrowDown01Icon,
+  ArrowMoveUpRightIcon,
   ArrowTurnBackwardIcon,
   ArrowUp01Icon,
   ArrowUpDownIcon,
@@ -40,7 +41,7 @@ import { formatMoney, formatNumber, formatPercent, formatRatio, pnlTone } from "
 import { describeInstrument } from "@/lib/market/describe"
 import { tradingViewUrl } from "@/lib/market/tradingview"
 import type { Instrument } from "@/lib/market/types"
-import { initialRisk, openRisk, realizedPnl, rMultiple, unrealizedPnl } from "@/lib/metrics"
+import { initialRisk, isRiskFree, openRisk, realizedPnl, rewardToRisk, rMultiple, unrealizedPnl } from "@/lib/metrics"
 import type { Label, Trade } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
@@ -49,6 +50,7 @@ export interface TradeActions {
   onClose: (trade: Trade) => void
   onReopen: (trade: Trade) => void
   onDelete: (trade: Trade) => void
+  onTrail: (trade: Trade) => void
 }
 
 type Mode = "open" | "closed"
@@ -203,18 +205,7 @@ const openColumns = helper.columns([
     id: "stop",
     header: "Stop / Target",
     sortUndefined: "last",
-    cell: ({ row }) => (
-      <Stack
-        top={
-          row.original.trade.stopLoss !== null ? (
-            formatNumber(row.original.trade.stopLoss)
-          ) : (
-            <span className="text-loss">no stop</span>
-          )
-        }
-        bottom={row.original.trade.target !== null ? `T ${formatNumber(row.original.trade.target)}` : undefined}
-      />
-    ),
+    cell: ({ row }) => <StopCell trade={row.original.trade} />,
   }),
   helper.accessor("last", {
     id: "last",
@@ -302,7 +293,18 @@ interface TradesTableProps extends TradeActions {
   empty: React.ReactNode
 }
 
-export function TradesTable({ trades, labels, mode, quotes, empty, onEdit, onClose, onReopen, onDelete }: TradesTableProps) {
+export function TradesTable({
+  trades,
+  labels,
+  mode,
+  quotes,
+  empty,
+  onEdit,
+  onClose,
+  onReopen,
+  onDelete,
+  onTrail,
+}: TradesTableProps) {
   const data = useMemo(() => {
     const labelById = new Map(labels.map((label) => [label.id, label]))
     return trades.map((trade) => toRow(trade, quotes.get(trade.symbol), labelById))
@@ -320,7 +322,7 @@ export function TradesTable({ trades, labels, mode, quotes, empty, onEdit, onClo
   if (!trades.length) return <div className="py-14">{empty}</div>
 
   return (
-    <ActionsContext.Provider value={{ mode, onEdit, onClose, onReopen, onDelete }}>
+    <ActionsContext.Provider value={{ mode, onEdit, onClose, onReopen, onDelete, onTrail }}>
       <Table className="font-mono text-xs tabular-nums">
         <TableHeader>
           {table.getHeaderGroups().map((group) => (
@@ -419,8 +421,51 @@ function SymbolCell({ row }: { row: TradeRow }) {
   )
 }
 
+function StopCell({ trade }: { trade: Trade }) {
+  const moves = trade.stopHistory.length - 1
+  const ratio = rewardToRisk(trade)
+  const target =
+    trade.target !== null ? `T ${formatNumber(trade.target)}${ratio !== null ? ` • ${formatRatio(ratio, "R")}` : ""}` : undefined
+
+  const stop =
+    trade.stopLoss === null ? (
+      <span className="text-loss">no stop</span>
+    ) : (
+      <span className="inline-flex items-center justify-end gap-1.5">
+        {isRiskFree(trade) ? (
+          <span className="rounded-sm bg-profit/12 px-1 font-sans text-[0.625rem] font-medium text-profit">Risk-free</span>
+        ) : (
+          moves > 0 && (
+            <span className="rounded-sm bg-muted px-1 font-sans text-[0.625rem] text-muted-foreground">
+              Trailed {moves}×
+            </span>
+          )
+        )}
+        {formatNumber(trade.stopLoss)}
+      </span>
+    )
+
+  if (moves < 1) return <Stack top={stop} bottom={target} />
+
+  return (
+    <Tooltip>
+      <TooltipTrigger render={<div className="cursor-default" />}>
+        <Stack top={stop} bottom={target} />
+      </TooltipTrigger>
+      <TooltipContent className="font-mono tabular-nums">
+        {trade.stopHistory.map((move, index) => (
+          <div key={`${move.date}-${index}`}>
+            {format(parseISO(move.date), "d MMM")} • {formatNumber(move.price)}
+            {index === 0 && " (initial)"}
+          </div>
+        ))}
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
 function RowActions({ trade }: { trade: Trade }) {
-  const { mode, onEdit, onClose, onReopen, onDelete } = useActions()
+  const { mode, onEdit, onClose, onReopen, onDelete, onTrail } = useActions()
   return (
     <div className="flex items-center justify-end gap-1 font-sans">
       <Tooltip>
@@ -445,6 +490,23 @@ function RowActions({ trade }: { trade: Trade }) {
         </TooltipTrigger>
         <TooltipContent>Open chart in TradingView</TooltipContent>
       </Tooltip>
+      {mode === "open" && (
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                size="icon-sm"
+                variant="ghost"
+                aria-label={`Trail stop for ${trade.symbol}`}
+                onClick={() => onTrail(trade)}
+              />
+            }
+          >
+            <HugeiconsIcon icon={ArrowMoveUpRightIcon} strokeWidth={2} />
+          </TooltipTrigger>
+          <TooltipContent>{trade.stopLoss === null ? "Set stop" : "Trail stop"}</TooltipContent>
+        </Tooltip>
+      )}
       {mode === "open" && (
         <Button size="sm" variant="outline" onClick={() => onClose(trade)}>
           <HugeiconsIcon icon={CheckmarkCircle02Icon} strokeWidth={2} data-icon="inline-start" />

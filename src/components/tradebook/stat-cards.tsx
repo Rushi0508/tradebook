@@ -26,6 +26,7 @@ export function StatCards({ stats, risk, periodLabel }: StatCardsProps) {
         detail={
           <>
             {risk.count} open
+            {risk.locked > 0 && <span className="text-profit"> • {money(risk.locked)} locked</span>}
             {risk.withoutStop > 0 && <span className="text-loss"> • {risk.withoutStop} without stop</span>}
           </>
         }

@@ -17,6 +17,7 @@ import {
 } from "@hugeicons/core-free-icons"
 
 import { CloseTradeDialog } from "@/components/tradebook/close-trade-dialog"
+import { TrailStopDialog } from "@/components/tradebook/trail-stop-dialog"
 import { LabelFilter } from "@/components/tradebook/label-filter"
 import { MonthStrip } from "@/components/tradebook/month-strip"
 import { SettingsDialog } from "@/components/tradebook/settings-dialog"
@@ -78,6 +79,7 @@ function DashboardView({
   const [editing, setEditing] = useState<Trade | undefined>()
   const [closing, setClosing] = useState<Trade | null>(null)
   const [deleting, setDeleting] = useState<Trade | null>(null)
+  const [trailing, setTrailing] = useState<Trade | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const market = useMarketSync()
 
@@ -137,6 +139,7 @@ function DashboardView({
     onClose: setClosing,
     onReopen: handleReopen,
     onDelete: setDeleting,
+    onTrail: setTrailing,
   }
 
   const hasTrades = trades.length > 0
@@ -279,6 +282,7 @@ function DashboardView({
         trade={editing}
         labels={labels}
       />
+      <TrailStopDialog trade={trailing} onOpenChange={(open) => !open && setTrailing(null)} />
       <CloseTradeDialog
         trade={closing}
         onOpenChange={(open) => !open && setClosing(null)}
