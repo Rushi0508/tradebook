@@ -8,6 +8,14 @@ export interface StopMove {
   price: number
 }
 
+export interface TradeExit {
+  id: string
+  date: string
+  price: number
+  quantity: number
+  fees: number
+}
+
 export interface Trade {
   id: string
   symbol: string
@@ -21,8 +29,7 @@ export interface Trade {
   stopHistory: StopMove[]
   target: number | null
   entryDate: string
-  exitPrice: number | null
-  exitDate: string | null
+  exits: TradeExit[]
   fees: number
   labels: string[]
   notes: string

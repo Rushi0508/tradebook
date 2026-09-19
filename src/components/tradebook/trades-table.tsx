@@ -42,7 +42,11 @@ import { describeInstrument } from "@/lib/market/describe"
 import { tradingViewUrl } from "@/lib/market/tradingview"
 import type { Instrument } from "@/lib/market/types"
 import {
+  averageExitPrice,
   initialRisk,
+  isOpen,
+  lastExitDate,
+  remainingQuantity,
   isRiskFree,
   openRisk,
   positionValue,
@@ -57,8 +61,8 @@ import { cn } from "@/lib/utils"
 
 export interface TradeActions {
   onEdit: (trade: Trade) => void
-  onClose: (trade: Trade) => void
-  onReopen: (trade: Trade) => void
+  onExit: (trade: Trade) => void
+  onUndoExit: (trade: Trade) => void
   onDelete: (trade: Trade) => void
   onTrail: (trade: Trade) => void
 }
@@ -79,6 +83,10 @@ interface TradeRow {
   pnl: number
   r: number | undefined
   exitChange: number | undefined
+  exitDate: string | null
+  avgExit: number | null
+  totalUnits: number
+  openUnits: number
 }
 
 function toRow(trade: Trade, quote: Instrument | undefined, labelById: Map<string, Label>): TradeRow {
@@ -86,7 +94,9 @@ function toRow(trade: Trade, quote: Instrument | undefined, labelById: Map<strin
   const last = quote?.close ?? undefined
   const unrealized = last !== undefined ? unrealizedPnl(trade, last) : undefined
   const risk = initialRisk(trade)
-  const end = trade.exitDate ? parseISO(trade.exitDate) : new Date()
+  const exitDate = isOpen(trade) ? null : lastExitDate(trade)
+  const avgExit = averageExitPrice(trade)
+  const end = exitDate ? parseISO(exitDate) : new Date()
   return {
     trade,
     title: quote && quote.kind !== "stock" ? describeInstrument(quote) : trade.symbol,
@@ -100,8 +110,11 @@ function toRow(trade: Trade, quote: Instrument | undefined, labelById: Map<strin
     risk: openRisk(trade) ?? undefined,
     pnl: realizedPnl(trade),
     r: rMultiple(trade) ?? undefined,
-    exitChange:
-      trade.exitPrice !== null ? ((trade.exitPrice - trade.entryPrice) / trade.entryPrice) * direction : undefined,
+    exitChange: avgExit !== null ? ((avgExit - trade.entryPrice) / trade.entryPrice) * direction : undefined,
+    exitDate,
+    avgExit,
+    totalUnits: trade.quantity * trade.multiplier,
+    openUnits: remainingQuantity(trade) * trade.multiplier,
   }
 }
 
@@ -114,6 +127,8 @@ const features = tableFeatures({
 const helper = createColumnHelper<typeof features, TradeRow>()
 
 const HEADER_TOOLTIPS: Record<string, TooltipKey> = {
+  qty: "qtyOpen",
+  exit: "exitPrice",
   stop: "stopTarget",
   last: "last",
   unrealized: "unrealized",
@@ -179,18 +194,36 @@ const labelsColumn = helper.display({
     ),
 })
 
-const qtyColumn = helper.accessor((row) => row.trade.quantity * row.trade.multiplier, {
+function lotsLabel(lots: number) {
+  return `${formatNumber(lots)} ${lots === 1 ? "lot" : "lots"}`
+}
+
+const openQtyColumn = helper.accessor("openUnits", {
   id: "qty",
   header: "Qty",
   cell: ({ row }) => {
-    const { quantity, multiplier } = row.original.trade
-    const value = formatMoney(positionValue(row.original.trade), { compact: true })
+    const { trade, openUnits, totalUnits } = row.original
+    const value = formatMoney(positionValue(trade), { compact: true })
+    if (openUnits !== totalUnits) {
+      return <Stack top={formatNumber(openUnits)} bottom={`of ${formatNumber(totalUnits)} • ${value}`} />
+    }
     return (
       <Stack
-        top={formatNumber(quantity * multiplier)}
-        bottom={multiplier !== 1 ? `${formatNumber(quantity)} ${quantity === 1 ? "lot" : "lots"} • ${value}` : value}
+        top={formatNumber(openUnits)}
+        bottom={trade.multiplier !== 1 ? `${lotsLabel(trade.quantity)} • ${value}` : value}
       />
     )
+  },
+})
+
+const closedQtyColumn = helper.accessor("totalUnits", {
+  id: "qty",
+  header: "Qty",
+  cell: ({ row }) => {
+    const { trade, totalUnits } = row.original
+    const exits = trade.exits.length
+    const detail = [trade.multiplier !== 1 && lotsLabel(trade.quantity), exits > 1 && `${exits} exits`].filter(Boolean)
+    return <Stack top={formatNumber(totalUnits)} bottom={detail.length ? detail.join(" • ") : undefined} />
   },
 })
 
@@ -217,7 +250,7 @@ const openColumns = helper.columns([
       <Stack top={<Muted>{shortDate(row.original.trade.entryDate)}</Muted>} bottom={`${row.original.daysHeld}d held`} />
     ),
   }),
-  qtyColumn,
+  openQtyColumn,
   entryColumn,
   helper.accessor((row) => row.trade.stopLoss ?? undefined, {
     id: "stop",
@@ -272,21 +305,21 @@ const openColumns = helper.columns([
 const closedColumns = helper.columns([
   symbolColumn,
   labelsColumn,
-  helper.accessor((row) => row.trade.exitDate ?? "", {
+  helper.accessor((row) => row.exitDate ?? "", {
     id: "closed",
     header: "Closed",
     sortFn: "text",
     cell: ({ row }) => (
-      <Stack top={<Muted>{shortDate(row.original.trade.exitDate!)}</Muted>} bottom={`${row.original.daysHeld}d held`} />
+      <Stack top={<Muted>{shortDate(row.original.exitDate!)}</Muted>} bottom={`${row.original.daysHeld}d held`} />
     ),
   }),
-  qtyColumn,
+  closedQtyColumn,
   entryColumn,
-  helper.accessor((row) => row.trade.exitPrice ?? 0, {
+  helper.accessor((row) => row.avgExit ?? 0, {
     id: "exit",
     header: "Exit",
     cell: ({ row }) => (
-      <Stack top={formatNumber(row.original.trade.exitPrice!)} bottom={signedPercent(row.original.exitChange)} />
+      <Stack top={formatNumber(row.original.avgExit!)} bottom={signedPercent(row.original.exitChange)} />
     ),
   }),
   helper.accessor("pnl", {
@@ -323,8 +356,8 @@ export function TradesTable({
   quotes,
   empty,
   onEdit,
-  onClose,
-  onReopen,
+  onExit,
+  onUndoExit,
   onDelete,
   onTrail,
 }: TradesTableProps) {
@@ -345,7 +378,7 @@ export function TradesTable({
   if (!trades.length) return <div className="py-14">{empty}</div>
 
   return (
-    <ActionsContext.Provider value={{ mode, onEdit, onClose, onReopen, onDelete, onTrail }}>
+    <ActionsContext.Provider value={{ mode, onEdit, onExit, onUndoExit, onDelete, onTrail }}>
       <Table className="font-mono text-xs tabular-nums">
         <TableHeader>
           {table.getHeaderGroups().map((group) => (
@@ -363,7 +396,9 @@ export function TradesTable({
                     )}
                   >
                     {header.isPlaceholder ? null : header.column.getCanSort() ? (
-                      <HeaderTooltip info={HEADER_TOOLTIPS[header.column.id]}>
+                      <HeaderTooltip
+                        info={header.column.id === "qty" && mode === "closed" ? undefined : HEADER_TOOLTIPS[header.column.id]}
+                      >
                         <button
                           type="button"
                           onClick={header.column.getToggleSortingHandler()}
@@ -510,7 +545,7 @@ function StopCell({ trade }: { trade: Trade }) {
 }
 
 function RowActions({ trade }: { trade: Trade }) {
-  const { mode, onEdit, onClose, onReopen, onDelete, onTrail } = useActions()
+  const { mode, onEdit, onExit, onUndoExit, onDelete, onTrail } = useActions()
   return (
     <div className="flex items-center justify-end gap-1 font-sans">
       <Tooltip>
@@ -553,24 +588,24 @@ function RowActions({ trade }: { trade: Trade }) {
         </Tooltip>
       )}
       {mode === "open" && (
-        <Button size="sm" variant="outline" onClick={() => onClose(trade)}>
+        <Button size="sm" variant="outline" onClick={() => onExit(trade)}>
           <HugeiconsIcon icon={CheckmarkCircle02Icon} strokeWidth={2} data-icon="inline-start" />
-          Close
+          Exit
         </Button>
       )}
       <DropdownMenu>
         <DropdownMenuTrigger render={<Button size="icon-sm" variant="ghost" aria-label={`Actions for ${trade.symbol}`} />}>
           <HugeiconsIcon icon={MoreHorizontalIcon} strokeWidth={2} />
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-36">
+        <DropdownMenuContent align="end" className="w-40">
           <DropdownMenuItem onClick={() => onEdit(trade)}>
             <HugeiconsIcon icon={PencilEdit02Icon} strokeWidth={2} />
             Edit
           </DropdownMenuItem>
-          {mode === "closed" && (
-            <DropdownMenuItem onClick={() => onReopen(trade)}>
+          {trade.exits.length > 0 && (
+            <DropdownMenuItem onClick={() => onUndoExit(trade)}>
               <HugeiconsIcon icon={ArrowTurnBackwardIcon} strokeWidth={2} />
-              Reopen
+              Undo last exit
             </DropdownMenuItem>
           )}
           <DropdownMenuSeparator />

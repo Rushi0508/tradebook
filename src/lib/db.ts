@@ -1,7 +1,7 @@
-import Dexie, { type EntityTable } from "dexie"
+import Dexie, { type EntityTable, type Transaction } from "dexie"
 
 import type { Instrument } from "@/lib/market/types"
-import { LABEL_COLORS, type Label, type StopMove, type Trade } from "@/lib/types"
+import { LABEL_COLORS, type Label, type StopMove, type Trade, type TradeExit } from "@/lib/types"
 
 export interface MetaEntry {
   key: string
@@ -30,21 +30,43 @@ db.version(3).stores({
   settings: null,
 })
 
-db.version(4)
-  .stores({})
-  .upgrade((tx) =>
-    tx
-      .table("trades")
-      .toCollection()
-      .modify((trade: Trade) => Object.assign(trade, normalizeTrade(trade)))
-  )
+function upgradeTrades(tx: Transaction) {
+  return tx
+    .table("trades")
+    .toCollection()
+    .modify((trade: LegacyTrade, ref: { value: Trade }) => {
+      ref.value = normalizeTrade(trade)
+    })
+}
 
-export function normalizeTrade(trade: Trade): Trade {
-  if (Array.isArray(trade.stopHistory) && trade.initialStop !== undefined) return trade
+db.version(4).stores({}).upgrade(upgradeTrades)
+
+db.version(5)
+  .stores({ trades: "id, symbol, entryDate, *labels" })
+  .upgrade(upgradeTrades)
+
+type LegacyTrade = Omit<Trade, "exits" | "initialStop" | "stopHistory"> &
+  Partial<Pick<Trade, "exits" | "initialStop" | "stopHistory">> & {
+    exitPrice?: number | null
+    exitDate?: string | null
+  }
+
+export function normalizeTrade(legacy: LegacyTrade): Trade {
+  const { exitPrice, exitDate, ...trade } = legacy
+  const hasStops = Array.isArray(trade.stopHistory) && trade.initialStop !== undefined
   return {
     ...trade,
-    initialStop: trade.stopLoss,
-    stopHistory: trade.stopLoss === null ? [] : [{ date: trade.entryDate, price: trade.stopLoss }],
+    initialStop: hasStops ? trade.initialStop! : trade.stopLoss,
+    stopHistory: hasStops
+      ? trade.stopHistory!
+      : trade.stopLoss === null
+        ? []
+        : [{ date: trade.entryDate, price: trade.stopLoss }],
+    exits: Array.isArray(trade.exits)
+      ? trade.exits
+      : exitPrice != null && exitDate
+        ? [{ id: crypto.randomUUID(), date: exitDate, price: exitPrice, quantity: trade.quantity, fees: 0 }]
+        : [],
   }
 }
 
@@ -67,8 +89,21 @@ export async function saveTrade(input: TradeInput, id?: string) {
   return newId
 }
 
-export function closeTrade(id: string, exitPrice: number, exitDate: string, fees: number) {
-  return db.trades.update(id, { exitPrice, exitDate, fees, updatedAt: Date.now() })
+export async function addExit(id: string, exit: Omit<TradeExit, "id">) {
+  await db.transaction("rw", db.trades, async () => {
+    const trade = await db.trades.get(id)
+    if (!trade) return
+    const exits = [...trade.exits, { ...exit, id: crypto.randomUUID() }].sort((a, b) => a.date.localeCompare(b.date))
+    await db.trades.update(id, { exits, updatedAt: Date.now() })
+  })
+}
+
+export async function undoLastExit(id: string) {
+  await db.transaction("rw", db.trades, async () => {
+    const trade = await db.trades.get(id)
+    if (!trade || !trade.exits.length) return
+    await db.trades.update(id, { exits: trade.exits.slice(0, -1), updatedAt: Date.now() })
+  })
 }
 
 export async function trailStop(id: string, move: StopMove) {
@@ -98,9 +133,6 @@ export async function undoStopMove(id: string) {
   })
 }
 
-export function reopenTrade(id: string) {
-  return db.trades.update(id, { exitPrice: null, exitDate: null, updatedAt: Date.now() })
-}
 
 export function deleteTrade(id: string) {
   return db.trades.delete(id)
@@ -165,7 +197,7 @@ export async function importBackup(data: unknown) {
   await db.transaction("rw", db.trades, db.labels, async () => {
     await Promise.all([db.trades.clear(), db.labels.clear()])
     await db.labels.bulkAdd(backup.labels!)
-    await db.trades.bulkAdd(backup.trades!.map(normalizeTrade))
+    await db.trades.bulkAdd((backup.trades as LegacyTrade[]).map(normalizeTrade))
   })
   return { trades: backup.trades.length, labels: backup.labels.length }
 }

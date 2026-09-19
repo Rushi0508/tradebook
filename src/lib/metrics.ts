@@ -1,10 +1,6 @@
-import type { Trade } from "@/lib/types"
+import type { Trade, TradeExit } from "@/lib/types"
 
-export function isOpen(trade: Trade) {
-  return trade.exitPrice === null
-}
-
-function direction(trade: Trade) {
+function direction(trade: Pick<Trade, "side">) {
   return trade.side === "long" ? 1 : -1
 }
 
@@ -12,13 +8,59 @@ function units(trade: Trade) {
   return trade.quantity * trade.multiplier
 }
 
+export function exitedQuantity(trade: Trade) {
+  return trade.exits.reduce((sum, exit) => sum + exit.quantity, 0)
+}
+
+export function remainingQuantity(trade: Trade) {
+  return Math.max(0, trade.quantity - exitedQuantity(trade))
+}
+
+function remainingUnits(trade: Trade) {
+  return remainingQuantity(trade) * trade.multiplier
+}
+
+export function isOpen(trade: Trade) {
+  return remainingQuantity(trade) > 0
+}
+
+export function isPartiallyExited(trade: Trade) {
+  return trade.exits.length > 0 && isOpen(trade)
+}
+
+export function lastExitDate(trade: Trade) {
+  return trade.exits.reduce<string | null>((latest, exit) => (!latest || exit.date > latest ? exit.date : latest), null)
+}
+
+export function averageExitPrice(trade: Trade) {
+  const quantity = exitedQuantity(trade)
+  if (!quantity) return null
+  return trade.exits.reduce((sum, exit) => sum + exit.price * exit.quantity, 0) / quantity
+}
+
+export function exitPnl(trade: Trade, exit: Pick<TradeExit, "price" | "quantity" | "fees">) {
+  return (exit.price - trade.entryPrice) * direction(trade) * exit.quantity * trade.multiplier - exit.fees
+}
+
+function firstExitDate(trade: Trade) {
+  return trade.exits.reduce<string | null>((first, exit) => (!first || exit.date < first ? exit.date : first), null)
+}
+
 export function realizedPnl(trade: Trade) {
-  if (trade.exitPrice === null) return 0
-  return (trade.exitPrice - trade.entryPrice) * direction(trade) * units(trade) - trade.fees
+  if (!trade.exits.length) return 0
+  return trade.exits.reduce((sum, exit) => sum + exitPnl(trade, exit), 0) - trade.fees
+}
+
+export function realizedPnlIn(trade: Trade, period: string | null) {
+  if (period === null) return realizedPnl(trade)
+  let pnl = 0
+  for (const exit of trade.exits) if (exit.date.startsWith(period)) pnl += exitPnl(trade, exit)
+  if (firstExitDate(trade)?.startsWith(period)) pnl -= trade.fees
+  return pnl
 }
 
 export function unrealizedPnl(trade: Trade, lastPrice: number) {
-  return (lastPrice - trade.entryPrice) * direction(trade) * units(trade)
+  return (lastPrice - trade.entryPrice) * direction(trade) * remainingUnits(trade)
 }
 
 export function initialRisk(trade: Trade) {
@@ -34,7 +76,7 @@ export function rewardToRisk(trade: Pick<Trade, "entryPrice" | "initialStop" | "
 
 export function lockedProfit(trade: Trade) {
   if (trade.stopLoss === null) return 0
-  return Math.max(0, (trade.stopLoss - trade.entryPrice) * direction(trade) * units(trade))
+  return Math.max(0, (trade.stopLoss - trade.entryPrice) * direction(trade) * remainingUnits(trade))
 }
 
 export function isRiskFree(trade: Trade) {
@@ -47,21 +89,21 @@ export function isWideningStop(trade: Trade, price: number) {
 
 export function openRisk(trade: Trade) {
   if (trade.stopLoss === null) return null
-  return Math.max(0, (trade.entryPrice - trade.stopLoss) * direction(trade) * units(trade))
+  return Math.max(0, (trade.entryPrice - trade.stopLoss) * direction(trade) * remainingUnits(trade))
 }
 
 export function rMultiple(trade: Trade) {
   const risk = initialRisk(trade)
-  if (!risk || trade.exitPrice === null) return null
+  if (!risk || !trade.exits.length) return null
   return realizedPnl(trade) / risk
 }
 
 export function positionValue(trade: Trade) {
-  return trade.entryPrice * units(trade)
+  return trade.entryPrice * remainingUnits(trade)
 }
 
 export function byExitOrder(a: Trade, b: Trade) {
-  return (a.exitDate ?? "").localeCompare(b.exitDate ?? "") || a.createdAt - b.createdAt
+  return (lastExitDate(a) ?? "").localeCompare(lastExitDate(b) ?? "") || a.createdAt - b.createdAt
 }
 
 export interface OpenRiskSummary {
@@ -108,7 +150,7 @@ export function summarizeDeployed(trades: Trade[], lastPrice: (trade: Trade) => 
     summary.positions++
     summary.cost += cost
     if (last === null) summary.unpriced++
-    summary.market += last === null ? cost : last * units(trade)
+    summary.market += last === null ? cost : last * remainingUnits(trade)
   }
   return summary
 }
@@ -117,7 +159,6 @@ export interface PerformanceStats {
   trades: number
   wins: number
   losses: number
-  netPnl: number
   grossProfit: number
   grossLoss: number
   winRate: number | null
@@ -153,39 +194,37 @@ export function computeStats(closed: Trade[]): PerformanceStats {
   }
 
   const count = closed.length
-  const netPnl = grossProfit - grossLoss
 
   return {
     trades: count,
     wins,
     losses,
-    netPnl,
     grossProfit,
     grossLoss,
     winRate: count ? wins / count : null,
     avgWin: wins ? grossProfit / wins : null,
     avgLoss: losses ? grossLoss / losses : null,
-    expectancy: count ? netPnl / count : null,
+    expectancy: count ? (grossProfit - grossLoss) / count : null,
     expectancyR: rCount ? rSum / rCount : null,
     profitFactor: grossLoss > 0 ? grossProfit / grossLoss : grossProfit > 0 ? Infinity : null,
   }
 }
 
-export function monthKey(date: string) {
-  return date.slice(0, 7)
-}
-
-export function pnlByMonth(closed: Trade[], year: number) {
+export function pnlByMonth(trades: Trade[], year: number) {
   const months = Array.from({ length: 12 }, (_, i) => ({
     key: `${year}-${String(i + 1).padStart(2, "0")}`,
     pnl: 0,
     trades: 0,
   }))
-  for (const trade of closed) {
-    if (!trade.exitDate || !trade.exitDate.startsWith(String(year))) continue
-    const month = months[Number(trade.exitDate.slice(5, 7)) - 1]
-    month.pnl += realizedPnl(trade)
-    month.trades++
+  for (const trade of trades) {
+    const first = firstExitDate(trade)
+    for (const exit of trade.exits) {
+      if (!exit.date.startsWith(String(year))) continue
+      const month = months[Number(exit.date.slice(5, 7)) - 1]
+      month.pnl += exitPnl(trade, exit)
+      month.trades++
+    }
+    if (first?.startsWith(String(year))) months[Number(first.slice(5, 7)) - 1].pnl -= trade.fees
   }
   return months
 }

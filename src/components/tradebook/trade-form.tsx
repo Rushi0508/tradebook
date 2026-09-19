@@ -2,6 +2,8 @@
 
 import { useState } from "react"
 import { toast } from "sonner"
+import { HugeiconsIcon } from "@hugeicons/react"
+import { Add01Icon, Delete02Icon } from "@hugeicons/core-free-icons"
 
 import { LabelPicker } from "@/components/tradebook/label-picker"
 import { SymbolPicker } from "@/components/tradebook/symbol-picker"
@@ -21,9 +23,18 @@ import { Textarea } from "@/components/ui/textarea"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { StopHistory } from "@/components/tradebook/stop-history"
 import { db, saveTrade, type TradeInput } from "@/lib/db"
-import { formatMoney, formatRatio, todayIso } from "@/lib/format"
+import { formatMoney, formatNumber, formatRatio, pnlTone, todayIso } from "@/lib/format"
 import type { Instrument as MarketInstrument } from "@/lib/market/types"
-import { INSTRUMENTS, type Instrument, type Label, type Side, type StopMove, type Trade } from "@/lib/types"
+import {
+  INSTRUMENTS,
+  type Instrument,
+  type Label,
+  type Side,
+  type StopMove,
+  type Trade,
+  type TradeExit,
+} from "@/lib/types"
+import { cn } from "@/lib/utils"
 
 const INSTRUMENT_ITEMS = INSTRUMENTS.map((value) => ({
   value,
@@ -40,11 +51,18 @@ interface FormState {
   stopLoss: string
   target: string
   entryDate: string
-  exitPrice: string
-  exitDate: string
+  exits: ExitDraft[]
   fees: string
   labels: string[]
   notes: string
+}
+
+interface ExitDraft {
+  id: string
+  date: string
+  price: string
+  quantity: string
+  fees: string
 }
 
 function toText(value: number | null) {
@@ -63,8 +81,7 @@ function initialState(trade?: Trade): FormState {
       stopLoss: "",
       target: "",
       entryDate: todayIso(),
-      exitPrice: "",
-      exitDate: "",
+      exits: [],
       fees: "",
       labels: [],
       notes: "",
@@ -80,8 +97,13 @@ function initialState(trade?: Trade): FormState {
     stopLoss: toText(trade.initialStop),
     target: toText(trade.target),
     entryDate: trade.entryDate,
-    exitPrice: toText(trade.exitPrice),
-    exitDate: trade.exitDate ?? "",
+    exits: trade.exits.map((exit) => ({
+      id: exit.id,
+      date: exit.date,
+      price: String(exit.price),
+      quantity: String(exit.quantity),
+      fees: exit.fees ? String(exit.fees) : "",
+    })),
     fees: trade.fees ? String(trade.fees) : "",
     labels: trade.labels,
     notes: trade.notes,
@@ -95,6 +117,26 @@ function parseNumber(value: string) {
 }
 
 type Errors = Partial<Record<keyof FormState, string>>
+
+function parseExits(form: FormState, quantity: number | null): { exits?: TradeExit[]; error?: string } {
+  const exits: TradeExit[] = []
+  for (const draft of form.exits) {
+    const price = parseNumber(draft.price)
+    const qty = parseNumber(draft.quantity)
+    const fees = parseNumber(draft.fees)
+    if (price === null || !(price > 0)) return { error: "Every exit needs a price above 0" }
+    if (qty === null || !(qty > 0)) return { error: "Every exit needs a quantity above 0" }
+    if (Number.isNaN(fees) || (fees !== null && fees < 0)) return { error: "Exit charges must be 0 or more" }
+    if (!draft.date) return { error: "Every exit needs a date" }
+    if (form.entryDate && draft.date < form.entryDate) return { error: "An exit is dated before the entry" }
+    exits.push({ id: draft.id, date: draft.date, price, quantity: qty, fees: fees ?? 0 })
+  }
+  const exited = exits.reduce((sum, exit) => sum + exit.quantity, 0)
+  if (quantity !== null && quantity > 0 && exited > quantity) {
+    return { error: `Exits add up to ${exited}, more than the ${quantity} you bought` }
+  }
+  return { exits: exits.sort((a, b) => a.date.localeCompare(b.date)) }
+}
 
 function stopFields(history: StopMove[], initial: number | null, entryDate: string) {
   if (initial === null) return { initialStop: null, stopLoss: null, stopHistory: [] }
@@ -111,7 +153,6 @@ function validate(form: FormState): { errors: Errors; input?: FormInput } {
   const entryPrice = parseNumber(form.entryPrice)
   const stopLoss = parseNumber(form.stopLoss)
   const target = parseNumber(form.target)
-  const exitPrice = parseNumber(form.exitPrice)
   const fees = parseNumber(form.fees)
 
   if (!form.symbol.trim()) errors.symbol = "Symbol is required"
@@ -121,13 +162,9 @@ function validate(form: FormState): { errors: Errors; input?: FormInput } {
   if (!form.entryDate) errors.entryDate = "Pick an entry date"
   if (Number.isNaN(stopLoss) || (stopLoss !== null && stopLoss < 0)) errors.stopLoss = "Invalid stop"
   if (Number.isNaN(target) || (target !== null && target < 0)) errors.target = "Invalid target"
-  if (Number.isNaN(fees) || (fees !== null && fees < 0)) errors.fees = "Invalid fees"
-  if (Number.isNaN(exitPrice) || (exitPrice !== null && exitPrice < 0)) errors.exitPrice = "Invalid exit"
-  if (exitPrice !== null && !form.exitDate) errors.exitDate = "Pick an exit date"
-  if (exitPrice === null && form.exitDate) errors.exitPrice = "Enter the exit price"
-  if (form.exitDate && form.entryDate && form.exitDate < form.entryDate) {
-    errors.exitDate = "Exit is before entry"
-  }
+  if (Number.isNaN(fees) || (fees !== null && fees < 0)) errors.fees = "Invalid charges"
+  const parsedExits = parseExits(form, quantity)
+  if (parsedExits.error) errors.exits = parsedExits.error
 
   if (Object.keys(errors).length) return { errors }
 
@@ -143,8 +180,7 @@ function validate(form: FormState): { errors: Errors; input?: FormInput } {
       stopLoss,
       target,
       entryDate: form.entryDate,
-      exitPrice,
-      exitDate: exitPrice === null ? null : form.exitDate,
+      exits: parsedExits.exits!,
       fees: fees ?? 0,
       labels: form.labels,
       notes: form.notes.trim(),
@@ -249,7 +285,7 @@ function TradeForm({
     <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col" noValidate>
       <SheetHeader className="border-b">
         <SheetTitle>{trade ? `Edit ${trade.symbol}` : "Log a trade"}</SheetTitle>
-        <SheetDescription>Leave the exit empty while the position is still open.</SheetDescription>
+        <SheetDescription>Add exits as you book profits. The trade stays open until the full quantity is exited.</SheetDescription>
       </SheetHeader>
 
       <div className="min-h-0 flex-1 overflow-y-auto p-4">
@@ -368,26 +404,23 @@ function TradeForm({
             <LabelPicker id="labels" labels={labels} value={form.labels} onChange={(v) => set("labels", v)} />
           </Field>
 
-          <FieldSeparator>Exit</FieldSeparator>
+          <FieldSeparator>Exits</FieldSeparator>
+
+          <ExitsEditor
+            exits={form.exits}
+            onChange={(exits) => set("exits", exits)}
+            quantity={parseNumber(form.quantity)}
+            multiplier={parseNumber(form.multiplier) ?? 1}
+            entryPrice={parseNumber(form.entryPrice)}
+            entryDate={form.entryDate}
+            side={form.side}
+            error={errors.exits}
+          />
 
           <div className="grid grid-cols-3 gap-3">
             <NumberField
-              id="exitPrice"
-              label="Exit price"
-              value={form.exitPrice}
-              onChange={(v) => set("exitPrice", v)}
-              error={errors.exitPrice}
-            />
-            <DateField
-              id="exitDate"
-              label="Exit date"
-              value={form.exitDate}
-              onChange={(v) => set("exitDate", v)}
-              error={errors.exitDate}
-            />
-            <NumberField
               id="fees"
-              label="Fees"
+              label="Other charges"
               value={form.fees}
               onChange={(v) => set("fees", v)}
               error={errors.fees}
@@ -416,6 +449,133 @@ function TradeForm({
         </Button>
       </SheetFooter>
     </form>
+  )
+}
+
+interface ExitsEditorProps {
+  exits: ExitDraft[]
+  onChange: (exits: ExitDraft[]) => void
+  quantity: number | null
+  multiplier: number
+  entryPrice: number | null
+  entryDate: string
+  side: Side
+  error?: string
+}
+
+function ExitsEditor({ exits, onChange, quantity, multiplier, entryPrice, entryDate, side, error }: ExitsEditorProps) {
+  const exited = exits.reduce((sum, exit) => sum + (Number(exit.quantity) || 0), 0)
+  const remaining = quantity !== null && !Number.isNaN(quantity) ? quantity - exited : null
+
+  function update(id: string, key: keyof Omit<ExitDraft, "id">, value: string) {
+    onChange(exits.map((exit) => (exit.id === id ? { ...exit, [key]: value } : exit)))
+  }
+
+  function addRow() {
+    const today = todayIso()
+    onChange([
+      ...exits,
+      {
+        id: crypto.randomUUID(),
+        date: entryDate && today < entryDate ? entryDate : today,
+        price: "",
+        quantity: remaining !== null && remaining > 0 ? String(remaining) : "",
+        fees: "",
+      },
+    ])
+  }
+
+  return (
+    <div className="grid gap-2">
+      {exits.length > 0 && (
+        <div className="grid gap-1.5">
+          <div className="grid grid-cols-[8.25rem_1fr_1fr_1fr_auto] gap-2 text-[0.6875rem] text-muted-foreground">
+            <span>Date</span>
+            <span>Qty{multiplier !== 1 && " (lots)"}</span>
+            <span>Price</span>
+            <span>Charges</span>
+            <span className="w-6" />
+          </div>
+          {exits.map((exit, index) => {
+            const price = Number(exit.price)
+            const qty = Number(exit.quantity)
+            const pnl =
+              entryPrice && price > 0 && qty > 0
+                ? (price - entryPrice) * (side === "long" ? 1 : -1) * qty * multiplier - (Number(exit.fees) || 0)
+                : null
+            return (
+              <div key={exit.id} className="grid gap-1">
+                <div className="grid grid-cols-[8.25rem_1fr_1fr_1fr_auto] items-center gap-2">
+                  <Input
+                    type="date"
+                    aria-label={`Exit ${index + 1} date`}
+                    className="font-mono tabular-nums"
+                    value={exit.date}
+                    onChange={(e) => update(exit.id, "date", e.target.value)}
+                  />
+                  <Input
+                    aria-label={`Exit ${index + 1} quantity`}
+                    inputMode="decimal"
+                    autoComplete="off"
+                    className="font-mono tabular-nums"
+                    value={exit.quantity}
+                    onChange={(e) => update(exit.id, "quantity", e.target.value.replace(/[^\d.]/g, ""))}
+                  />
+                  <Input
+                    aria-label={`Exit ${index + 1} price`}
+                    inputMode="decimal"
+                    autoComplete="off"
+                    className="font-mono tabular-nums"
+                    value={exit.price}
+                    onChange={(e) => update(exit.id, "price", e.target.value.replace(/[^\d.]/g, ""))}
+                  />
+                  <Input
+                    aria-label={`Exit ${index + 1} charges`}
+                    inputMode="decimal"
+                    autoComplete="off"
+                    className="font-mono tabular-nums"
+                    value={exit.fees}
+                    onChange={(e) => update(exit.id, "fees", e.target.value.replace(/[^\d.]/g, ""))}
+                  />
+                  <Button
+                    type="button"
+                    size="icon-sm"
+                    variant="ghost"
+                    aria-label={`Remove exit ${index + 1}`}
+                    onClick={() => onChange(exits.filter((item) => item.id !== exit.id))}
+                  >
+                    <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
+                  </Button>
+                </div>
+                {pnl !== null && (
+                  <div className={cn("text-right font-mono text-[0.6875rem] tabular-nums", pnlTone(pnl))}>
+                    {formatMoney(pnl, { signed: true })}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-[0.6875rem] text-muted-foreground">
+          {exits.length === 0
+            ? "No exits yet. The position is open."
+            : remaining === null
+              ? ""
+              : remaining > 0
+                ? `${formatNumber(remaining)} still open`
+                : remaining === 0
+                  ? "Fully closed"
+                  : "Exits are more than the quantity bought"}
+        </span>
+        <Button type="button" size="sm" variant="outline" onClick={addRow} disabled={remaining !== null && remaining <= 0}>
+          <HugeiconsIcon icon={Add01Icon} strokeWidth={2} data-icon="inline-start" />
+          Add exit
+        </Button>
+      </div>
+      {error && <FieldError>{error}</FieldError>}
+    </div>
   )
 }
 

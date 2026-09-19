@@ -9,7 +9,8 @@ A private trading journal for Indian markets. Log swing, positional and F&O trad
 ## Features
 
 - **Single-screen dashboard**: key metrics, a monthly P&L chart, and open and closed trades, all on one page.
-- **Month-by-month tracking**: step through months or switch to all time. A trade counts in the month it was **closed**.
+- **Month-by-month tracking**: step through months or switch to all time. Profit is booked in the month of each exit, and a trade's win/loss counts in the month it is fully closed.
+- **Partial exits**: book part of a position (25%, 50% or any quantity) and keep the rest running. Each exit keeps its own date, price and charges, and can be edited or undone.
 - **NSE and BSE symbol search**: search about 42k stocks, futures and options (e.g. `nifty 25000 ce`). Picking one fills in the instrument type, lot size and last close.
 - **End-of-day prices**: downloaded from the official NSE and BSE bhav copies once per trading day after 5 PM IST, and used for the last price and unrealized P&L.
 - **Trailing stops**: every trade keeps its initial stop (which defines 1R) plus a dated history of stop moves. A trail dialog has a breakeven shortcut, shows the distance from the market price, and warns if you widen your stop.
@@ -24,12 +25,12 @@ A private trading journal for Indian markets. Log swing, positional and F&O trad
 
 | Metric | What it means |
 |---|---|
-| **Net P&L** | Realized profit after fees from trades closed in the selected month. |
+| **Net P&L** | Realized profit after charges from every exit in the selected month, including partial exits. |
 | **Open risk** | What you would lose if every open trade hit its current stop. Also shows profit locked in by trailed stops. |
 | **Capital deployed** | Money tied up in open long stock and option positions at entry price, plus their value and % move at the last close. |
-| **Win rate** | Share of closed trades that made money, with the average win and average loss. |
-| **Expectancy** | Average profit per closed trade, in rupees and in R. |
-| **Profit factor** | Total profit from winners divided by total loss from losers. Above 1 means you are profitable. |
+| **Win rate** | Share of fully closed trades that made money, with the average win and average loss. |
+| **Expectancy** | Average profit per fully closed trade, in rupees and in R. |
+| **Profit factor** | Total profit from winners divided by total loss from losers, over fully closed trades. Above 1 means you are profitable. |
 
 On each trade row:
 
@@ -39,7 +40,7 @@ On each trade row:
 | **Reward : risk** | Distance to target divided by distance to initial stop, e.g. `T 1,300 • 4.00R`. |
 | **Unrealized** | Open P&L at the last close, with % move and R. |
 | **Open risk** | Loss if this trade hits its current stop. Zero once the stop is at or past entry, when the stop is marked **Risk-free**. |
-| **Qty** | Units held, with the position value (e.g. `₹47.2K`, or `2 lots • ₹390` for F&O). |
+| **Qty** | Units still held, with the position value (e.g. `₹47.2K`, or `2 lots • ₹390` for F&O). After a partial exit it shows `of 100 • ₹59K`: the original size and the entry value of what is left. |
 
 ## Screenshots
 
@@ -100,7 +101,6 @@ Only the publishable key is needed; it is designed to be used in the browser. Ne
 
 ## Known limitations
 
-- **One exit per trade**: partial exits are not supported yet.
 - **Capital deployed** excludes futures and short positions, because they use margin rather than full cost.
 - **TradingView links** for options and futures open the underlying's chart, not the individual contract.
 - **Percentages are per trade or position**, not account-level returns. There is no account capital tracking.

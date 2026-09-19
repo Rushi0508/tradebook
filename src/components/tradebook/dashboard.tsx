@@ -15,7 +15,7 @@ import {
   Sun03Icon,
 } from "@hugeicons/core-free-icons"
 
-import { CloseTradeDialog } from "@/components/tradebook/close-trade-dialog"
+import { ExitTradeDialog } from "@/components/tradebook/exit-trade-dialog"
 import { Logo } from "@/components/tradebook/logo"
 import { TrailStopDialog } from "@/components/tradebook/trail-stop-dialog"
 import { LabelFilter } from "@/components/tradebook/label-filter"
@@ -41,12 +41,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useMarketSync, useQuotes } from "@/hooks/use-market"
 import { useTradebook } from "@/hooks/use-tradebook"
-import { deleteTrade, reopenTrade, requestPersistentStorage } from "@/lib/db"
+import { deleteTrade, requestPersistentStorage, undoLastExit } from "@/lib/db"
 import { formatMoney, pnlTone, todayIso } from "@/lib/format"
 import {
   byExitOrder,
   computeStats,
   isOpen,
+  lastExitDate,
+  realizedPnlIn,
   pnlByMonth,
   summarizeDeployed,
   summarizeOpenRisk,
@@ -78,7 +80,7 @@ function DashboardView({
   const [tab, setTab] = useState<"open" | "closed">("open")
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<Trade | undefined>()
-  const [closing, setClosing] = useState<Trade | null>(null)
+  const [exiting, setExiting] = useState<Trade | null>(null)
   const [deleting, setDeleting] = useState<Trade | null>(null)
   const [trailing, setTrailing] = useState<Trade | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -90,7 +92,7 @@ function DashboardView({
     const filtered = trades.filter(matches)
     const open = filtered.filter(isOpen).sort((a, b) => b.entryDate.localeCompare(a.entryDate))
     const allClosed = filtered.filter((trade) => !isOpen(trade))
-    const closed = (period ? allClosed.filter((trade) => trade.exitDate!.startsWith(period)) : allClosed)
+    const closed = (period ? allClosed.filter((trade) => lastExitDate(trade)!.startsWith(period)) : allClosed)
       .sort(byExitOrder)
       .reverse()
     const year = Number((period ?? currentMonth).slice(0, 4))
@@ -99,8 +101,12 @@ function DashboardView({
       open,
       closed,
       stats: computeStats(closed),
+      realized: {
+        total: filtered.reduce((sum, trade) => sum + realizedPnlIn(trade, period), 0),
+        fromOpen: open.reduce((sum, trade) => sum + realizedPnlIn(trade, period), 0),
+      },
       risk: summarizeOpenRisk(open),
-      months: pnlByMonth(allClosed, year),
+      months: pnlByMonth(filtered, year),
     }
   }, [trades, labelFilter, period, currentMonth])
 
@@ -122,10 +128,10 @@ function DashboardView({
     setFormOpen(true)
   }
 
-  async function handleReopen(trade: Trade) {
-    await reopenTrade(trade.id)
-    toast.success(`${trade.symbol} reopened`)
-    setTab("open")
+  async function handleUndoExit(trade: Trade) {
+    await undoLastExit(trade.id)
+    toast.success(`Last exit of ${trade.symbol} removed`)
+    if (!isOpen(trade)) setTab("open")
   }
 
   async function confirmDelete() {
@@ -138,8 +144,8 @@ function DashboardView({
 
   const actions = {
     onEdit: openForm,
-    onClose: setClosing,
-    onReopen: handleReopen,
+    onExit: setExiting,
+    onUndoExit: handleUndoExit,
     onDelete: setDeleting,
     onTrail: setTrailing,
   }
@@ -194,6 +200,7 @@ function DashboardView({
 
       <StatCards
         stats={view.stats}
+        realized={view.realized}
         risk={view.risk}
         deployed={deployed}
         periodLabel={periodLabel}
@@ -284,10 +291,7 @@ function DashboardView({
         labels={labels}
       />
       <TrailStopDialog trade={trailing} onOpenChange={(open) => !open && setTrailing(null)} />
-      <CloseTradeDialog
-        trade={closing}
-        onOpenChange={(open) => !open && setClosing(null)}
-      />
+      <ExitTradeDialog trade={exiting} onOpenChange={(open) => !open && setExiting(null)} />
       <SettingsDialog
         open={settingsOpen}
         onOpenChange={setSettingsOpen}

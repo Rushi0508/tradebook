@@ -9,12 +9,13 @@ import { cn } from "@/lib/utils"
 
 interface StatCardsProps {
   stats: PerformanceStats
+  realized: { total: number; fromOpen: number }
   risk: OpenRiskSummary
   deployed: DeployedSummary
   periodLabel: string
 }
 
-export function StatCards({ stats, risk, deployed, periodLabel }: StatCardsProps) {
+export function StatCards({ stats, realized, risk, deployed, periodLabel }: StatCardsProps) {
   const marketChange = deployed.market - deployed.cost
   const money = (value: number, signed = false) => formatMoney(value, { signed })
 
@@ -23,9 +24,20 @@ export function StatCards({ stats, risk, deployed, periodLabel }: StatCardsProps
       <Stat
         label={`Net P&L • ${periodLabel}`}
         info="netPnl"
-        value={money(stats.netPnl, true)}
-        tone={pnlTone(stats.netPnl)}
-        detail={`${stats.trades} closed • ${stats.wins}W ${stats.losses}L`}
+        value={money(realized.total, true)}
+        tone={pnlTone(realized.total)}
+        detail={
+          <>
+            {stats.trades} closed • {stats.wins}W {stats.losses}L
+            {realized.fromOpen !== 0 && (
+              <span className={pnlTone(realized.fromOpen)}>
+                {" "}
+                • {realized.fromOpen > 0 ? "+" : "-"}
+                {formatMoney(Math.abs(realized.fromOpen), { compact: true })} partial
+              </span>
+            )}
+          </>
+        }
       />
       <Stat
         label="Open risk"
