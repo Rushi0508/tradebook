@@ -48,6 +48,7 @@ import {
   computeStats,
   isOpen,
   pnlByMonth,
+  summarizeDeployed,
   summarizeOpenRisk,
   unrealizedPnl,
 } from "@/lib/metrics"
@@ -106,6 +107,7 @@ function DashboardView({
   const quotes = useQuotes([...view.open, ...view.closed].map((trade) => trade.symbol))
   const priced = view.open.filter((trade) => quotes.get(trade.symbol)?.close != null)
   const unrealized = priced.reduce((sum, trade) => sum + unrealizedPnl(trade, quotes.get(trade.symbol)!.close!), 0)
+  const deployed = summarizeDeployed(view.open, (trade) => quotes.get(trade.symbol)?.close ?? null)
 
   const periodLabel = period ? format(parseISO(`${period}-01`), "MMM yyyy") : "All time"
 
@@ -195,6 +197,7 @@ function DashboardView({
       <StatCards
         stats={view.stats}
         risk={view.risk}
+        deployed={deployed}
         periodLabel={periodLabel}
       />
 

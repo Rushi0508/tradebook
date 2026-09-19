@@ -1,14 +1,16 @@
 import { formatMoney, formatPercent, formatRatio, pnlTone } from "@/lib/format"
-import type { OpenRiskSummary, PerformanceStats } from "@/lib/metrics"
+import type { DeployedSummary, OpenRiskSummary, PerformanceStats } from "@/lib/metrics"
 import { cn } from "@/lib/utils"
 
 interface StatCardsProps {
   stats: PerformanceStats
   risk: OpenRiskSummary
+  deployed: DeployedSummary
   periodLabel: string
 }
 
-export function StatCards({ stats, risk, periodLabel }: StatCardsProps) {
+export function StatCards({ stats, risk, deployed, periodLabel }: StatCardsProps) {
+  const marketChange = deployed.market - deployed.cost
   const money = (value: number, signed = false) => formatMoney(value, { signed })
 
   return (
@@ -28,6 +30,34 @@ export function StatCards({ stats, risk, periodLabel }: StatCardsProps) {
             {risk.count} open
             {risk.locked > 0 && <span className="text-profit"> • {money(risk.locked)} locked</span>}
             {risk.withoutStop > 0 && <span className="text-loss"> • {risk.withoutStop} without stop</span>}
+          </>
+        }
+      />
+      <Stat
+        label="Capital deployed"
+        value={money(deployed.cost)}
+        detail={
+          <>
+            {deployed.positions ? (
+              <>
+                {formatMoney(deployed.market, { compact: true })} at market
+                {marketChange !== 0 && deployed.cost > 0 && (
+                  <span className={pnlTone(marketChange)}>
+                    {" "}
+                    {marketChange > 0 ? "+" : ""}
+                    {formatPercent(marketChange / deployed.cost, 2)}
+                  </span>
+                )}
+              </>
+            ) : (
+              "No open positions"
+            )}
+            {deployed.excluded > 0 && (
+              <span title={`${deployed.excluded} futures or short positions are not counted, since they use margin`}>
+                {" "}
+                • {deployed.excluded} excl.
+              </span>
+            )}
           </>
         }
       />
@@ -55,12 +85,6 @@ export function StatCards({ stats, risk, periodLabel }: StatCardsProps) {
           stats.profitFactor === null ? undefined : stats.profitFactor >= 1 ? "text-profit" : "text-loss"
         }
         detail={`${money(stats.grossProfit)} / ${money(stats.grossLoss)}`}
-      />
-      <Stat
-        label="Max drawdown"
-        value={stats.maxDrawdown > 0 ? money(-stats.maxDrawdown) : money(0)}
-        tone={stats.maxDrawdown > 0 ? "text-loss" : undefined}
-        detail="Peak-to-trough, closed trades"
       />
     </div>
   )
