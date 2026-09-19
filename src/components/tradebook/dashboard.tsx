@@ -150,7 +150,7 @@ function DashboardView({
           </div>
           <div className="flex flex-col leading-tight">
             <span className="text-sm font-semibold tracking-tight">TradeBook</span>
-            <span className="text-[0.625rem] text-muted-foreground">Indian markets • NSE</span>
+            <span className="text-[0.625rem] text-muted-foreground">Indian markets</span>
           </div>
         </div>
 
@@ -248,7 +248,7 @@ function DashboardView({
                     ? labelFilter.length
                       ? "No open trades match this label filter."
                       : "You are fully in cash."
-                    : "Built for Indian markets (NSE). Your journal lives only in this browser and is never uploaded."
+                    : "Built for Indian markets. Your journal lives only in this browser and is never uploaded."
                 }
                 action={!hasTrades ? () => openForm() : undefined}
               />
@@ -348,10 +348,10 @@ function MarketStatus({
           data-icon="inline-start"
           className={cn(syncing && "animate-spin", error && "text-loss")}
         />
-        {date ? `NSE close ${format(parseISO(date), "d MMM")}` : syncing ? "Loading NSE…" : "NSE prices"}
+        {date ? `Close ${format(parseISO(date), "d MMM")}` : syncing ? "Loading prices…" : "Prices"}
       </TooltipTrigger>
       <TooltipContent>
-        {error ? `Refresh failed: ${error}` : "End-of-day prices from the NSE bhav copy. Updates after 5 PM IST."}
+        {error ? `Refresh failed: ${error}` : "End-of-day prices from the NSE and BSE bhav copies. Updates after 5 PM IST."}
       </TooltipContent>
     </Tooltip>
   )

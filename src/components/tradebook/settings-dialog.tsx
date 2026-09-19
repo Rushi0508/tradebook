@@ -62,7 +62,7 @@ export function SettingsDialog({ open, onOpenChange, labels, persisted }: Settin
         <DialogHeader>
           <DialogTitle>Settings</DialogTitle>
           <DialogDescription>
-            Built for Indian markets (NSE). Everything is stored in this browser only.
+            Built for Indian markets. Everything is stored in this browser only.
           </DialogDescription>
         </DialogHeader>
 

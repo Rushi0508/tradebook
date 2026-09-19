@@ -2,11 +2,13 @@ import { db } from "@/lib/db"
 import { fromRow, type MarketSnapshot } from "@/lib/market/types"
 
 const PUBLISH_HOUR_IST = 17
+const DATA_VERSION = 2
 const RETRY_MS = 60 * 60 * 1000
 
 export interface MarketMeta {
   date: string | null
   checkedAt: number | null
+  version?: number
 }
 
 function istParts(now: Date) {
@@ -29,22 +31,23 @@ export async function getMarketMeta(): Promise<MarketMeta> {
 
 export async function syncMarketData({ force = false } = {}) {
   const meta = await getMarketMeta()
+  const stale = meta.version !== DATA_VERSION
   const expected = expectedMarketDate()
   const upToDate = meta.date !== null && meta.date >= expected
   const recentlyChecked = meta.checkedAt !== null && Date.now() - meta.checkedAt < RETRY_MS
-  if (!force && (upToDate || (meta.date !== null && recentlyChecked))) return { updated: false, date: meta.date }
+  if (!force && !stale && (upToDate || (meta.date !== null && recentlyChecked))) return { updated: false, date: meta.date }
 
   const res = await fetch("/api/market")
   const body = (await res.json()) as MarketSnapshot | { error: string }
   if (!res.ok || "error" in body) throw new Error("error" in body ? body.error : `Request failed (${res.status})`)
 
-  const changed = body.date !== meta.date
+  const changed = stale || body.date !== meta.date
   await db.transaction("rw", db.instruments, db.meta, async () => {
     if (changed) {
       await db.instruments.clear()
       await db.instruments.bulkPut(body.instruments.map(fromRow))
     }
-    await db.meta.put({ key: "market", value: { date: body.date, checkedAt: Date.now() } satisfies MarketMeta })
+    await db.meta.put({ key: "market", value: { date: body.date, checkedAt: Date.now(), version: DATA_VERSION } satisfies MarketMeta })
   })
   return { updated: changed, date: body.date }
 }

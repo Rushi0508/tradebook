@@ -1,4 +1,5 @@
 export type InstrumentKind = "stock" | "option" | "future"
+export type Exchange = "NSE" | "BSE"
 
 export type InstrumentRow = [
   symbol: string,
@@ -11,6 +12,7 @@ export type InstrumentRow = [
   expiry: string | null,
   strike: number | null,
   optionType: "CE" | "PE" | null,
+  exchange: Exchange,
 ]
 
 export interface MarketSnapshot {
@@ -29,9 +31,10 @@ export interface Instrument {
   expiry: string | null
   strike: number | null
   optionType: "CE" | "PE" | null
+  exchange: Exchange
 }
 
 export function fromRow(row: InstrumentRow): Instrument {
-  const [symbol, name, kind, underlying, close, prevClose, lot, expiry, strike, optionType] = row
-  return { symbol, name, kind, underlying, close, prevClose, lot, expiry, strike, optionType }
+  const [symbol, name, kind, underlying, close, prevClose, lot, expiry, strike, optionType, exchange] = row
+  return { symbol, name, kind, underlying, close, prevClose, lot, expiry, strike, optionType, exchange }
 }

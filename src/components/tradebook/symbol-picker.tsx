@@ -84,7 +84,7 @@ export function SymbolPicker({ id, value, onValueChange, onSelect, invalid }: Sy
         id={id}
         autoFocus
         autoComplete="off"
-        placeholder={instruments?.length ? "Search NSE stocks, futures, options" : "Symbol"}
+        placeholder={instruments?.length ? "Search stocks, futures, options" : "Symbol"}
         showTrigger={false}
         className="w-full [&_input]:uppercase [&_input]:placeholder:normal-case"
         aria-invalid={invalid}
@@ -92,7 +92,7 @@ export function SymbolPicker({ id, value, onValueChange, onSelect, invalid }: Sy
       <ComboboxContent className="w-[calc(var(--anchor-width)+10rem)]">
         {value.trim() && (
           <ComboboxEmpty>
-            {instruments?.length ? "No NSE match. The symbol will be saved as typed." : "Market list not loaded yet"}
+            {instruments?.length ? "No match. The symbol will be saved as typed." : "Market list not loaded yet"}
           </ComboboxEmpty>
         )}
         <ComboboxList>
@@ -102,7 +102,7 @@ export function SymbolPicker({ id, value, onValueChange, onSelect, invalid }: Sy
               value={instrument}
               className="relative flex min-h-7 w-full cursor-default items-center gap-2.5 rounded-md px-2 py-1 text-xs/relaxed outline-hidden select-none data-highlighted:bg-accent data-highlighted:text-accent-foreground"
             >
-              <SymbolLogo ticker={logoTicker(instrument.symbol, instrument.underlying, "NSE")} size={20} />
+              <SymbolLogo ticker={logoTicker(instrument.symbol, instrument.underlying, instrument.exchange)} size={20} />
               <div className="min-w-0 flex-1">
                 <div className="truncate font-medium">
                   {instrument.kind === "stock" ? instrument.symbol : describeInstrument(instrument)}
@@ -113,11 +113,16 @@ export function SymbolPicker({ id, value, onValueChange, onSelect, invalid }: Sy
                     : `${instrument.kind === "option" ? "Option" : "Future"} • lot ${instrument.lot}`}
                 </div>
               </div>
-              {instrument.close !== null && (
-                <span className="font-mono text-[0.6875rem] text-muted-foreground tabular-nums">
-                  {formatNumber(instrument.close)}
+              <div className="flex flex-col items-end gap-0.5">
+                {instrument.close !== null && (
+                  <span className="font-mono text-[0.6875rem] text-muted-foreground tabular-nums">
+                    {formatNumber(instrument.close)}
+                  </span>
+                )}
+                <span className="rounded-sm bg-muted px-1 text-[0.5625rem] font-medium text-muted-foreground">
+                  {instrument.exchange}
                 </span>
-              )}
+              </div>
             </Autocomplete.Item>
           )}
         </ComboboxList>

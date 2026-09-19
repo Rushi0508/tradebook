@@ -10,7 +10,9 @@ const missing = new Set<string>()
 
 export function logoTicker(symbol: string, underlying?: string | null, exchange?: string | null) {
   const base = underlying || symbol
-  return exchange === "NSE" ? `${base}.NS` : base
+  if (exchange === "NSE") return `${base}.NS`
+  if (exchange === "BSE") return `${base}.BO`
+  return base
 }
 
 interface SymbolLogoProps {
@@ -25,7 +27,7 @@ export function SymbolLogo(props: SymbolLogoProps) {
 
 function LogoImage({ ticker, size = 20, className }: SymbolLogoProps) {
   const [failed, setFailed] = useState(() => !TOKEN || missing.has(ticker))
-  const initials = ticker.replace(/\.NS$/, "").slice(0, 2)
+  const initials = ticker.replace(/\.(NS|BO)$/, "").slice(0, 2)
 
   return (
     <span

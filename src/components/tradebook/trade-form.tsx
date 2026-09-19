@@ -221,7 +221,7 @@ function TradeForm({
       await saveTrade(
         {
           ...result.input,
-          exchange: listed ? "NSE" : unchanged ? (trade.exchange ?? null) : null,
+          exchange: listed ? listed.exchange : unchanged ? (trade.exchange ?? null) : null,
           underlying: listed ? listed.underlying : unchanged ? (trade.underlying ?? null) : null,
         },
         trade?.id
