@@ -1,6 +1,8 @@
 "use client"
 
 import { useState } from "react"
+import { format, parseISO } from "date-fns"
+import { useLiveQuery } from "dexie-react-hooks"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
@@ -14,10 +16,12 @@ import {
 } from "@/components/ui/dialog"
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-import { trailStop } from "@/lib/db"
-import { formatMoney, formatNumber, todayIso } from "@/lib/format"
+import { db, trailStop } from "@/lib/db"
+import { formatMoney, formatNumber, formatPercent, pnlTone, todayIso } from "@/lib/format"
+import { getMarketMeta } from "@/lib/market/sync"
 import { isWideningStop, lockedProfit, openRisk } from "@/lib/metrics"
 import type { Trade } from "@/lib/types"
+import { cn } from "@/lib/utils"
 
 interface TrailStopDialogProps {
   trade: Trade | null
@@ -40,12 +44,17 @@ function TrailStopForm({ trade, onDone }: { trade: Trade; onDone: () => void }) 
   const [price, setPrice] = useState(trade.stopLoss !== null ? String(trade.stopLoss) : "")
   const [date, setDate] = useState(() => (todayIso() < earliest ? earliest : todayIso()))
   const [error, setError] = useState<string | null>(null)
+  const quote = useLiveQuery(() => db.instruments.get(trade.symbol), [trade.symbol])
+  const market = useLiveQuery(getMarketMeta)
+  const last = quote?.close ?? null
 
   const value = Number(price)
   const valid = price !== "" && Number.isFinite(value) && value > 0
   const preview = valid ? { ...trade, stopLoss: value } : null
   const widening = valid && isWideningStop(trade, value)
   const unchanged = valid && value === trade.stopLoss
+  const move = last ? ((last - trade.entryPrice) / trade.entryPrice) * (trade.side === "long" ? 1 : -1) : null
+  const cushion = valid && last ? ((last - value) / last) * (trade.side === "long" ? 1 : -1) : null
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
@@ -68,6 +77,21 @@ function TrailStopForm({ trade, onDone }: { trade: Trade; onDone: () => void }) 
           {trade.initialStop !== null && trade.initialStop !== trade.stopLoss && ` • initial ${formatNumber(trade.initialStop)}`}
         </DialogDescription>
       </DialogHeader>
+
+      <div className="flex items-baseline justify-between rounded-md border px-3 py-2">
+        <span className="text-muted-foreground">
+          Market price{market?.date && ` • close ${format(parseISO(market.date), "d MMM")}`}
+        </span>
+        <span className="font-mono text-sm font-medium tabular-nums">
+          {last !== null ? formatNumber(last) : "—"}
+          {move !== null && (
+            <span className={cn("ml-2 text-xs", pnlTone(move))}>
+              {move > 0 ? "+" : ""}
+              {formatPercent(move, 2)}
+            </span>
+          )}
+        </span>
+      </div>
 
       <FieldGroup className="grid grid-cols-[1fr_1fr_auto] items-end gap-3">
         <Field data-invalid={!!error}>
@@ -116,7 +140,7 @@ function TrailStopForm({ trade, onDone }: { trade: Trade; onDone: () => void }) 
         <p className="text-warning">This widens your stop and increases the risk on this trade.</p>
       )}
 
-      <div className="grid grid-cols-2 gap-3 rounded-md bg-muted/50 px-3 py-2 font-mono text-[0.6875rem] tabular-nums">
+      <div className="grid grid-cols-3 gap-3 rounded-md bg-muted/50 px-3 py-2 font-mono text-[0.6875rem] tabular-nums">
         <div>
           <div className="text-muted-foreground">Open risk</div>
           <div className={preview && openRisk(preview) ? "text-warning" : undefined}>
@@ -127,6 +151,16 @@ function TrailStopForm({ trade, onDone }: { trade: Trade; onDone: () => void }) 
           <div className="text-muted-foreground">Locked in</div>
           <div className={preview && lockedProfit(preview) ? "text-profit" : undefined}>
             {preview ? formatMoney(lockedProfit(preview)) : "—"}
+          </div>
+        </div>
+        <div>
+          <div className="text-muted-foreground">From market</div>
+          <div className={cushion !== null && cushion < 0 ? "text-loss" : undefined}>
+            {cushion === null
+              ? "—"
+              : cushion < 0
+                ? "Past market price"
+                : `${formatPercent(cushion, 2)} ${trade.side === "long" ? "below" : "above"}`}
           </div>
         </div>
       </div>

@@ -13,7 +13,15 @@ const signedMoneyFormatter = new Intl.NumberFormat(LOCALE, {
   signDisplay: "exceptZero",
 })
 
-export function formatMoney(value: number, { signed = false } = {}) {
+const compactMoneyFormatter = new Intl.NumberFormat(LOCALE, {
+  style: "currency",
+  currency: "INR",
+  notation: "compact",
+  maximumFractionDigits: 2,
+})
+
+export function formatMoney(value: number, { signed = false, compact = false } = {}) {
+  if (compact) return compactMoneyFormatter.format(value)
   return (signed ? signedMoneyFormatter : moneyFormatter).format(value)
 }
 

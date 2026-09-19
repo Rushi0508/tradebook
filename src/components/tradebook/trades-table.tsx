@@ -41,7 +41,16 @@ import { formatMoney, formatNumber, formatPercent, formatRatio, pnlTone } from "
 import { describeInstrument } from "@/lib/market/describe"
 import { tradingViewUrl } from "@/lib/market/tradingview"
 import type { Instrument } from "@/lib/market/types"
-import { initialRisk, isRiskFree, openRisk, realizedPnl, rewardToRisk, rMultiple, unrealizedPnl } from "@/lib/metrics"
+import {
+  initialRisk,
+  isRiskFree,
+  openRisk,
+  positionValue,
+  realizedPnl,
+  rewardToRisk,
+  rMultiple,
+  unrealizedPnl,
+} from "@/lib/metrics"
 import type { Label, Trade } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
@@ -125,7 +134,7 @@ function Stack({ top, bottom, className }: { top: React.ReactNode; bottom?: Reac
   return (
     <div className={cn("flex flex-col gap-0.5", className)}>
       <div>{top}</div>
-      <div className="text-[0.6875rem] text-muted-foreground">{bottom ?? " "}</div>
+      {bottom !== undefined && <div className="text-[0.6875rem] text-muted-foreground">{bottom}</div>}
     </div>
   )
 }
@@ -164,16 +173,16 @@ const labelsColumn = helper.display({
 const qtyColumn = helper.accessor((row) => row.trade.quantity * row.trade.multiplier, {
   id: "qty",
   header: "Qty",
-  cell: ({ row }) => (
-    <Stack
-      top={formatNumber(row.original.trade.quantity * row.original.trade.multiplier)}
-      bottom={
-        row.original.trade.multiplier !== 1
-          ? `${formatNumber(row.original.trade.quantity)} × ${formatNumber(row.original.trade.multiplier)}`
-          : undefined
-      }
-    />
-  ),
+  cell: ({ row }) => {
+    const { quantity, multiplier } = row.original.trade
+    const value = formatMoney(positionValue(row.original.trade), { compact: true })
+    return (
+      <Stack
+        top={formatNumber(quantity * multiplier)}
+        bottom={multiplier !== 1 ? `${formatNumber(quantity)} ${quantity === 1 ? "lot" : "lots"} • ${value}` : value}
+      />
+    )
+  },
 })
 
 const entryColumn = helper.accessor((row) => row.trade.entryPrice, {
