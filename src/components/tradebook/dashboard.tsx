@@ -11,6 +11,7 @@ import {
   ArrowRight01Icon,
   BookOpen01Icon,
   Moon02Icon,
+  RefreshIcon,
   Settings02Icon,
   Sun03Icon,
 } from "@hugeicons/core-free-icons"
@@ -36,9 +37,11 @@ import { Button } from "@/components/ui/button"
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { useMarketSync, useQuotes } from "@/hooks/use-market"
 import { useTradebook } from "@/hooks/use-tradebook"
 import { deleteTrade, reopenTrade, requestPersistentStorage } from "@/lib/db"
-import { todayIso } from "@/lib/format"
+import { formatMoney, pnlTone, todayIso } from "@/lib/format"
 import {
   byExitOrder,
   computeStats,
@@ -46,8 +49,10 @@ import {
   pnlByMonth,
   realizedPnl,
   summarizeOpenRisk,
+  unrealizedPnl,
 } from "@/lib/metrics"
 import type { Trade } from "@/lib/types"
+import { cn } from "@/lib/utils"
 
 export function Dashboard() {
   const data = useTradebook()
@@ -76,6 +81,7 @@ function DashboardView({
   const [closing, setClosing] = useState<Trade | null>(null)
   const [deleting, setDeleting] = useState<Trade | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const market = useMarketSync()
 
   const view = useMemo(() => {
     const matches = (trade: Trade) =>
@@ -99,6 +105,10 @@ function DashboardView({
       months: pnlByMonth(allClosed, year),
     }
   }, [trades, labelFilter, period, settings.capital, currentMonth])
+
+  const quotes = useQuotes([...view.open, ...view.closed].map((trade) => trade.symbol))
+  const priced = view.open.filter((trade) => quotes.get(trade.symbol)?.close != null)
+  const unrealized = priced.reduce((sum, trade) => sum + unrealizedPnl(trade, quotes.get(trade.symbol)!.close!), 0)
 
   const periodLabel = period ? format(parseISO(`${period}-01`), "MMM yyyy") : "All time"
 
@@ -169,6 +179,7 @@ function DashboardView({
           </Button>
         </div>
 
+        <MarketStatus {...market} />
         <LabelFilter labels={labels} value={labelFilter} onChange={setLabelFilter} />
         <ThemeToggle />
         <Button size="icon" variant="outline" aria-label="Settings" onClick={() => setSettingsOpen(true)}>
@@ -211,12 +222,27 @@ function DashboardView({
             </TabsTrigger>
           </TabsList>
           <span className="text-[0.6875rem] text-muted-foreground">
-            {tab === "open" ? "All open positions" : `Closed in ${periodLabel.toLowerCase() === "all time" ? "all time" : periodLabel}`}
+            {tab === "open" ? (
+              priced.length ? (
+                <>
+                  Unrealized{" "}
+                  <span className={cn("font-mono tabular-nums", pnlTone(unrealized))}>
+                    {formatMoney(unrealized, settings.currency, { signed: true })}
+                  </span>
+                  {priced.length < view.open.length && ` · ${priced.length}/${view.open.length} priced`}
+                </>
+              ) : (
+                "All open positions"
+              )
+            ) : (
+              `Closed in ${periodLabel === "All time" ? "all time" : periodLabel}`
+            )}
           </span>
         </div>
         <TabsContent value="open">
           <TradesTable
             mode="open"
+            quotes={quotes}
             trades={view.open}
             labels={labels}
             currency={settings.currency}
@@ -239,6 +265,7 @@ function DashboardView({
         <TabsContent value="closed">
           <TradesTable
             mode="closed"
+            quotes={quotes}
             trades={view.closed}
             labels={labels}
             currency={settings.currency}
@@ -252,6 +279,12 @@ function DashboardView({
           />
         </TabsContent>
       </Tabs>
+
+      <footer className="flex justify-end text-[0.625rem] text-muted-foreground">
+        <a href="https://logo.dev" target="_blank" rel="noreferrer" className="hover:text-foreground">
+          Logos provided by Logo.dev
+        </a>
+      </footer>
 
       <TradeFormSheet
         open={formOpen}
@@ -304,6 +337,39 @@ function EmptyState({ title, description, action }: { title: string; description
         </Button>
       )}
     </Empty>
+  )
+}
+
+function MarketStatus({
+  date,
+  syncing,
+  error,
+  refresh,
+}: {
+  date: string | null
+  syncing: boolean
+  error: string | null
+  refresh: () => void
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <Button variant="ghost" onClick={refresh} disabled={syncing} className="text-muted-foreground" />
+        }
+      >
+        <HugeiconsIcon
+          icon={RefreshIcon}
+          strokeWidth={2}
+          data-icon="inline-start"
+          className={cn(syncing && "animate-spin", error && "text-loss")}
+        />
+        {date ? `NSE close ${format(parseISO(date), "d MMM")}` : syncing ? "Loading NSE…" : "NSE prices"}
+      </TooltipTrigger>
+      <TooltipContent>
+        {error ? `Refresh failed: ${error}` : "End-of-day prices from the NSE bhav copy. Updates after 5 PM IST."}
+      </TooltipContent>
+    </Tooltip>
   )
 }
 

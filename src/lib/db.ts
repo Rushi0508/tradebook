@@ -1,17 +1,30 @@
 import Dexie, { type EntityTable } from "dexie"
 
+import type { Instrument } from "@/lib/market/types"
 import { DEFAULT_SETTINGS, LABEL_COLORS, type Label, type Settings, type Trade } from "@/lib/types"
+
+export interface MetaEntry {
+  key: string
+  value: unknown
+}
 
 export const db = new Dexie("tradebook") as Dexie & {
   trades: EntityTable<Trade, "id">
   labels: EntityTable<Label, "id">
   settings: EntityTable<Settings, "id">
+  instruments: EntityTable<Instrument, "symbol">
+  meta: EntityTable<MetaEntry, "key">
 }
 
 db.version(1).stores({
   trades: "id, symbol, entryDate, exitDate, *labels",
   labels: "id, &name",
   settings: "id",
+})
+
+db.version(2).stores({
+  instruments: "symbol, underlying, kind",
+  meta: "key",
 })
 
 export async function requestPersistentStorage() {

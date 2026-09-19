@@ -11,6 +11,7 @@ import {
 } from "@hugeicons/core-free-icons"
 
 import { LabelTag } from "@/components/tradebook/label-dot"
+import { logoTicker, SymbolLogo } from "@/components/tradebook/symbol-logo"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -21,7 +22,9 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { formatMoney, formatNumber, formatRatio, pnlTone } from "@/lib/format"
-import { openRisk, realizedPnl, rMultiple } from "@/lib/metrics"
+import { describeInstrument } from "@/lib/market/describe"
+import type { Instrument } from "@/lib/market/types"
+import { openRisk, realizedPnl, rMultiple, unrealizedPnl } from "@/lib/metrics"
 import type { Label, Trade } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
@@ -37,6 +40,7 @@ interface TradesTableProps extends TradeActions {
   labels: Label[]
   currency: string
   mode: "open" | "closed"
+  quotes: Map<string, Instrument>
   empty: React.ReactNode
 }
 
@@ -44,7 +48,7 @@ function shortDate(date: string) {
   return format(parseISO(date), "d MMM yy")
 }
 
-export function TradesTable({ trades, labels, currency, mode, empty, ...actions }: TradesTableProps) {
+export function TradesTable({ trades, labels, currency, mode, quotes, empty, ...actions }: TradesTableProps) {
   const labelById = new Map(labels.map((label) => [label.id, label]))
 
   if (!trades.length) return <div className="py-14">{empty}</div>
@@ -64,6 +68,8 @@ export function TradesTable({ trades, labels, currency, mode, empty, ...actions 
             <>
               <TableHead className="text-right">Stop</TableHead>
               <TableHead className="text-right">Target</TableHead>
+              <TableHead className="text-right">Last</TableHead>
+              <TableHead className="text-right">Unrealized</TableHead>
               <TableHead className="text-right">Open risk</TableHead>
             </>
           ) : (
@@ -81,6 +87,10 @@ export function TradesTable({ trades, labels, currency, mode, empty, ...actions 
           const risk = openRisk(trade)
           const pnl = realizedPnl(trade)
           const r = rMultiple(trade)
+          const quote = quotes.get(trade.symbol)
+          const last = quote?.close ?? null
+          const title = quote && quote.kind !== "stock" ? describeInstrument(quote) : trade.symbol
+          const unrealized = last !== null ? unrealizedPnl(trade, last) : null
           const qty = trade.multiplier === 1 ? formatNumber(trade.quantity) : `${formatNumber(trade.quantity)}×${formatNumber(trade.multiplier)}`
           const tradeLabels = trade.labels.map((id) => labelById.get(id)).filter(Boolean) as Label[]
 
@@ -92,6 +102,7 @@ export function TradesTable({ trades, labels, currency, mode, empty, ...actions 
                   onClick={() => actions.onEdit(trade)}
                   className="flex items-center gap-2 text-left font-sans outline-none focus-visible:underline"
                 >
+                  <SymbolLogo ticker={logoTicker(trade.symbol, trade.underlying, trade.exchange)} size={22} />
                   <span
                     className={cn(
                       "w-9 rounded-sm px-1 py-px text-center font-mono text-[0.625rem] font-medium uppercase",
@@ -100,7 +111,7 @@ export function TradesTable({ trades, labels, currency, mode, empty, ...actions 
                   >
                     {trade.side}
                   </span>
-                  <span className="font-medium">{trade.symbol}</span>
+                  <span className="font-medium" title={trade.symbol}>{title}</span>
                   <span className="text-[0.6875rem] text-muted-foreground capitalize">{trade.instrument}</span>
                 </button>
               </TableCell>
@@ -139,6 +150,10 @@ export function TradesTable({ trades, labels, currency, mode, empty, ...actions 
                   </TableCell>
                   <TableCell className="text-right text-muted-foreground">
                     {trade.target !== null ? formatNumber(trade.target) : "—"}
+                  </TableCell>
+                  <TableCell className="text-right">{last !== null ? formatNumber(last) : "—"}</TableCell>
+                  <TableCell className={cn("text-right", unrealized !== null ? pnlTone(unrealized) : "text-muted-foreground")}>
+                    {unrealized !== null ? money(unrealized, true) : "—"}
                   </TableCell>
                   <TableCell className={cn("text-right", risk ? "text-warning" : "text-muted-foreground")}>
                     {risk === null ? "—" : money(risk)}

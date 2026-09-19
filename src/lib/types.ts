@@ -19,6 +19,8 @@ export interface Trade {
   fees: number
   labels: string[]
   notes: string
+  underlying?: string | null
+  exchange?: string | null
   createdAt: number
   updatedAt: number
 }
@@ -35,7 +37,7 @@ export interface Settings {
   currency: string
 }
 
-export const DEFAULT_SETTINGS: Settings = { id: "app", capital: 0, currency: "USD" }
+export const DEFAULT_SETTINGS: Settings = { id: "app", capital: 0, currency: "INR" }
 
 export const LABEL_COLORS = [
   "#f97316",

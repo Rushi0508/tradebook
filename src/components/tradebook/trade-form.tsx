@@ -4,6 +4,7 @@ import { useState } from "react"
 import { toast } from "sonner"
 
 import { LabelPicker } from "@/components/tradebook/label-picker"
+import { SymbolPicker } from "@/components/tradebook/symbol-picker"
 import { Button } from "@/components/ui/button"
 import { Field, FieldError, FieldGroup, FieldLabel, FieldSeparator } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
@@ -18,8 +19,9 @@ import {
 } from "@/components/ui/sheet"
 import { Textarea } from "@/components/ui/textarea"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
-import { saveTrade, type TradeInput } from "@/lib/db"
+import { db, saveTrade, type TradeInput } from "@/lib/db"
 import { formatMoney, formatRatio, todayIso } from "@/lib/format"
+import type { Instrument as MarketInstrument } from "@/lib/market/types"
 import { INSTRUMENTS, type Instrument, type Label, type Side, type Trade } from "@/lib/types"
 
 const INSTRUMENT_ITEMS = INSTRUMENTS.map((value) => ({
@@ -187,6 +189,17 @@ function TradeForm({
     if (errors[key]) setErrors((prev) => ({ ...prev, [key]: undefined }))
   }
 
+  function applyInstrument(instrument: MarketInstrument) {
+    setForm((prev) => ({
+      ...prev,
+      symbol: instrument.symbol,
+      instrument: instrument.kind,
+      multiplier: String(instrument.lot),
+      entryPrice: prev.entryPrice || (instrument.close !== null ? String(instrument.close) : ""),
+    }))
+    setErrors((prev) => ({ ...prev, symbol: undefined, multiplier: undefined, entryPrice: undefined }))
+  }
+
   const entry = parseNumber(form.entryPrice)
   const stop = parseNumber(form.stopLoss)
   const target = parseNumber(form.target)
@@ -207,7 +220,16 @@ function TradeForm({
     }
     setSaving(true)
     try {
-      await saveTrade(result.input, trade?.id)
+      const listed = await db.instruments.get(result.input.symbol)
+      const unchanged = trade?.symbol === result.input.symbol
+      await saveTrade(
+        {
+          ...result.input,
+          exchange: listed ? "NSE" : unchanged ? (trade.exchange ?? null) : null,
+          underlying: listed ? listed.underlying : unchanged ? (trade.underlying ?? null) : null,
+        },
+        trade?.id
+      )
       toast.success(trade ? "Trade updated" : `${result.input.symbol} logged`)
       onDone()
     } catch (error) {
@@ -228,14 +250,12 @@ function TradeForm({
           <div className="grid grid-cols-[1fr_auto] gap-3">
             <Field data-invalid={!!errors.symbol}>
               <FieldLabel htmlFor="symbol">Symbol</FieldLabel>
-              <Input
+              <SymbolPicker
                 id="symbol"
-                autoFocus
-                autoComplete="off"
                 value={form.symbol}
-                onChange={(e) => set("symbol", e.target.value.toUpperCase())}
-                placeholder="AAPL"
-                aria-invalid={!!errors.symbol}
+                onValueChange={(v) => set("symbol", v)}
+                onSelect={applyInstrument}
+                invalid={!!errors.symbol}
               />
               <FieldError>{errors.symbol}</FieldError>
             </Field>

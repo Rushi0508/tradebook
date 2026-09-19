@@ -17,6 +17,10 @@ export function realizedPnl(trade: Trade) {
   return (trade.exitPrice - trade.entryPrice) * direction(trade) * units(trade) - trade.fees
 }
 
+export function unrealizedPnl(trade: Trade, lastPrice: number) {
+  return (lastPrice - trade.entryPrice) * direction(trade) * units(trade)
+}
+
 export function initialRisk(trade: Trade) {
   if (trade.stopLoss === null) return null
   return Math.abs(trade.entryPrice - trade.stopLoss) * units(trade)
