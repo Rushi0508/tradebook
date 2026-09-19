@@ -1,15 +1,16 @@
 import type { Metadata } from "next"
-import { Geist_Mono, Inter } from "next/font/google"
+import { DM_Mono, DM_Sans } from "next/font/google"
 
 import { Providers } from "@/components/providers"
 import { cn } from "@/lib/utils"
 import "./globals.css"
 
-const inter = Inter({ subsets: ["latin"], variable: "--font-sans" })
+const dmSans = DM_Sans({ subsets: ["latin"], variable: "--font-sans" })
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const dmMono = DM_Mono({
   subsets: ["latin"],
+  weight: ["400", "500"],
+  variable: "--font-dm-mono",
 })
 
 export const metadata: Metadata = {
@@ -22,7 +23,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html
       lang="en"
       suppressHydrationWarning
-      className={cn("h-full antialiased font-sans", inter.variable, geistMono.variable)}
+      className={cn("h-full antialiased font-sans", dmSans.variable, dmMono.variable)}
     >
       <body className="min-h-full flex flex-col">
         <Providers>{children}</Providers>
