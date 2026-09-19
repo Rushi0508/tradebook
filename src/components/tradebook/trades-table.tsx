@@ -376,7 +376,17 @@ export function TradesTable({
         </TableHeader>
         <TableBody>
           {table.getRowModel().rows.map((row) => (
-            <TableRow key={row.id}>
+            <TableRow
+              key={row.id}
+              className="cursor-pointer"
+              onClick={(event) => {
+                const target = event.target as HTMLElement
+                if (!event.currentTarget.contains(target)) return
+                if (target.closest("button, a, input, [role=menuitem]")) return
+                if (window.getSelection()?.toString()) return
+                onEdit(row.original.trade)
+              }}
+            >
               {row.getAllCells().map((cell) => (
                 <TableCell
                   key={cell.id}
