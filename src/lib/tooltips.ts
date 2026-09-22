@@ -13,7 +13,7 @@ export const TOOLTIPS = {
     "Total profit from winning trades divided by total loss from losing trades, using fully closed trades. Above 1 means you are profitable; above 1.5 is generally considered strong.",
   stopTarget:
     "Current stop, trailed or not, with the target and reward-to-risk below. Reward-to-risk uses the initial stop, so it does not change when you trail.",
-  last: "Closing price from the latest NSE/BSE bhav copy, with the % move since your entry.",
+  last: "Closing price from the latest NSE/BSE bhav copy, with that day's % change from the previous close.",
   unrealized:
     "Profit or loss on the quantity you still hold, at the last close, with the % move and how many R it is worth. Charges are not included until you exit.",
   tradeRisk: "Loss if this trade hits its current stop. Zero once the stop is at or past your entry.",

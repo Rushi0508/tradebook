@@ -38,7 +38,8 @@ On each trade row:
 |---|---|
 | **R-multiple** | Profit or loss divided by the initial risk (entry to **initial** stop). Trailing a stop never changes it. |
 | **Reward : risk** | Distance to target divided by distance to initial stop, e.g. `T 1,300 • 4.00R`. |
-| **Unrealized** | Open P&L at the last close, with % move and R. |
+| **Last** | Latest closing price from the bhav copy, with that day's % change from the previous close. |
+| **Unrealized** | Open P&L at the last close, with the % move since your entry and R. |
 | **Open risk** | Loss if this trade hits its current stop. Zero once the stop is at or past entry, when the stop is marked **Risk-free**. |
 | **Qty** | Units still held, with the position value (e.g. `₹47.2K`, or `2 lots • ₹390` for F&O). After a partial exit it shows `of 100 • ₹59K`: the original size and the entry value of what is left. |
 

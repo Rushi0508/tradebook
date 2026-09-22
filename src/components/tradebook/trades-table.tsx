@@ -76,7 +76,8 @@ interface TradeRow {
   exchange: string | null
   daysHeld: number
   last: number | undefined
-  lastChange: number | undefined
+  dayChange: number | undefined
+  entryChange: number | undefined
   unrealized: number | undefined
   unrealizedR: number | undefined
   risk: number | undefined
@@ -104,7 +105,9 @@ function toRow(trade: Trade, quote: Instrument | undefined, labelById: Map<strin
     exchange: trade.exchange ?? quote?.exchange ?? null,
     daysHeld: differenceInCalendarDays(end, parseISO(trade.entryDate)),
     last,
-    lastChange: last !== undefined ? ((last - trade.entryPrice) / trade.entryPrice) * direction : undefined,
+    dayChange:
+      last !== undefined && quote?.prevClose ? (last - quote.prevClose) / quote.prevClose : undefined,
+    entryChange: last !== undefined ? ((last - trade.entryPrice) / trade.entryPrice) * direction : undefined,
     unrealized,
     unrealizedR: unrealized !== undefined && risk ? unrealized / risk : undefined,
     risk: openRisk(trade) ?? undefined,
@@ -264,7 +267,7 @@ const openColumns = helper.columns([
     sortUndefined: "last",
     cell: ({ row }) =>
       row.original.last !== undefined ? (
-        <Stack top={formatNumber(row.original.last)} bottom={signedPercent(row.original.lastChange)} />
+        <Stack top={formatNumber(row.original.last)} bottom={signedPercent(row.original.dayChange)} />
       ) : (
         <Muted>—</Muted>
       ),
@@ -280,7 +283,7 @@ const openColumns = helper.columns([
           top={money(row.original.unrealized, true)}
           bottom={
             <>
-              {signedPercent(row.original.lastChange)}
+              {signedPercent(row.original.entryChange)}
               {row.original.unrealizedR !== undefined && ` • ${formatRatio(row.original.unrealizedR, "R")}`}
             </>
           }
